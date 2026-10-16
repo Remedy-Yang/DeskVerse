@@ -1,0 +1,9 @@
+import {readFile,access} from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const base=path.resolve('dist');const visited=new Set();
+async function walk(file){file=path.normalize(file);if(visited.has(file))return;visited.add(file);const code=(await readFile(file,'utf8')).replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');for(const m of code.matchAll(/(?:^\s*(?:import|export)\s+(?:[\w*$,\s{}]+?\s+from\s*)?|\bimport\(\s*)['"]([^'"]+)['"]/gm)){let target=m[1];if(target==='three')target=base+'/vendor/three/three.module.js';else if(target.startsWith('three/addons/'))target=base+'/vendor/three/addons/'+target.slice(13);else if(target.startsWith('.'))target=path.resolve(path.dirname(file),target);else throw new Error('Unexpected external module '+target);await walk(target);}}
+await walk(base+'/app.js');
+const html=await readFile(base+'/index.html','utf8');const app=await readFile(base+'/app.js','utf8');const ids=[...html.matchAll(/id="([^"]+)"/g)].map(m=>m[1]);assert.equal(ids.length,new Set(ids).size,'duplicate element ids');for(const m of app.matchAll(/\$\('([^']+)'\)/g))assert.ok(ids.includes(m[1]),'missing id '+m[1]);
+for(const file of ['style.css','assets/demo-lamp.glb','assets/demo-monitor.glb','vendor/three/addons/libs/draco/gltf/draco_wasm_wrapper.js','vendor/three/addons/libs/draco/gltf/draco_decoder.wasm','vendor/three/addons/libs/basis/basis_transcoder.js','vendor/three/addons/libs/basis/basis_transcoder.wasm'])await access(base+'/'+file);
+console.log('Static dependencies verified:',visited.size,'JS modules;',ids.length,'unique UI IDs; GLB assets and local decoders present.');

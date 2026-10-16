@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f8fa"><meta name="description" content="DeskVerse 三维桌面工作台：导入 GLB，移动、旋转、校准尺寸，找到适合你的摆放。">
+<title>DeskVerse · 三维摆放工作台</title>
+<link rel="stylesheet" href="./style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="./" aria-label="DeskVerse 首页"><span class="brand-icon" data-icon="cube"></span><strong>DeskVerse<span>STUDIO</span></strong></a>
+  <div class="project-title"><span class="status-dot"></span>我的桌面空间 <span class="tag">工作草稿</span></div>
+  <div class="header-actions"><span class="privacy"><span data-icon="shield"></span>模型仅在本机处理</span><button id="export" class="button subtle"><span data-icon="download"></span>导出布局</button><button id="import-top" class="button primary"><span data-icon="plus"></span>导入 GLB</button></div>
+</header>
+<div class="workspace">
+  <aside class="sidebar left-panel">
+    <div class="panel-heading"><div><div class="eyebrow">YOUR SPACE</div><h1>场景资产</h1></div><span class="counter" id="object-count">0</span></div>
+    <button id="upload-zone" class="upload-zone"><span class="upload-symbol" data-icon="upload"></span><strong>把灵感放进空间</strong><span>点击导入，或拖入 GLB 文件</span><small>支持多个独立模型 · 单个 ≤ 80 MB</small></button>
+    <div class="section-label">当前场景 <span id="scene-unit">单位 · cm</span></div>
+    <div class="surface-row"><span class="asset-icon" data-icon="table"></span><div><strong id="surface-name">参考桌面</strong><small id="surface-size">140 × 75 cm · 辅助平面</small></div><span class="tiny-tag">基准</span></div>
+    <div id="object-list" class="object-list" aria-label="场景中的模型"></div>
+    <div class="left-actions"><button id="import-table" class="button subtle full"><span data-icon="table"></span>导入真实桌子 GLB</button><button id="load-demo" class="text-button"><span data-icon="refresh"></span>载入示例模型</button></div>
+    <div class="bottom-note"><span class="step-label">从模型，到你的桌面</span><p>导入 → 校准尺寸 → 自由摆放</p><span>示例仅用于体验操作。请导入团队生成的真实 GLB 完成验收。</span></div>
+  </aside>
+  <main id="viewport" class="viewport" aria-label="三维摆放画布" tabindex="0">
+    <div class="viewport-label"><span class="live-dot"></span><strong>三维工作区</strong><span>透视视图</span></div>
+    <div class="view-tools"><button id="view-home" title="恢复初始视角 (H)" aria-label="恢复初始视角" data-icon="home"></button><button id="view-top" title="俯视" aria-label="俯视" data-icon="top"></button><button id="view-focus" title="聚焦选中物品 (F)" aria-label="聚焦选中物品" data-icon="focus"></button><span></span><button id="grid-toggle" class="active" title="显示/隐藏网格" aria-label="显示或隐藏网格" aria-pressed="true" data-icon="grid"></button></div>
+    <div class="tool-dock" role="toolbar" aria-label="编辑工具"><button data-mode="drag" title="沿 XZ 平面拖动 (V)"><span data-icon="hand"></span><span>拖动</span><kbd>V</kbd></button><button data-mode="translate" class="active" title="XYZ 自由移动 (G)"><span data-icon="move"></span><span>移动</span><kbd>G</kbd></button><button data-mode="rotate" title="自由旋转 (R)"><span data-icon="rotate"></span><span>旋转</span><kbd>R</kbd></button><button data-mode="scale" title="缩放 (S)"><span data-icon="scale"></span><span>缩放</span><kbd>S</kbd></button><i></i><button id="undo" title="撤销 (Ctrl+Z)" aria-label="撤销" data-icon="undo" disabled></button><button id="redo" title="重做 (Ctrl+Shift+Z)" aria-label="重做" data-icon="redo" disabled></button></div>
+    <div class="scene-caption"><span class="caption-line"></span><div><strong>给想法，留一个位置。</strong><span id="scene-hint">拖动 X / Y / Z 箭头自由移动；中键拖动环绕查看</span></div></div>
+    <div class="axis-legend" aria-label="坐标轴约定"><span class="axis-y">Y ↑ 高</span><span class="axis-x">X → 左右</span><span class="axis-z">Z ↙ 前后</span></div>
+    <div id="drop-overlay" class="drop-overlay" hidden><span data-icon="upload"></span><strong>松开，放入你的 GLB</strong><span>每个文件作为独立物品导入</span></div>
+    <div id="loading" class="loading" role="status" hidden><span class="spinner"></span><span id="loading-text">正在加载模型…</span></div>
+    <div id="fatal" class="fatal" hidden><strong>三维画面暂时无法启动</strong><p id="fatal-message"></p><button class="button primary" id="retry">重新加载</button></div>
+  </main>
+  <aside class="sidebar right-panel">
+    <div class="panel-heading"><div><div class="eyebrow">OBJECT INSPECTOR</div><h2>物品属性</h2></div><span data-icon="sliders"></span></div>
+    <div id="empty-inspector" class="empty-inspector"><span data-icon="cube"></span><strong>选中一个物品</strong><p>点击场景或左侧列表，<br>调整它的位置、角度与尺寸。</p></div>
+    <div id="inspector" hidden>
+      <div class="selected-card"><span class="selected-icon" data-icon="cube"></span><div><strong id="selected-name"></strong><span id="selected-meta"></span></div><span class="selected-dot"></span></div>
+      <div class="property-section"><div class="property-heading"><h3>位置</h3><span>cm</span></div><div class="input-row" id="position-fields"><label><span class="axis-x">X</span><input type="number" id="px" step="1" aria-label="X 位置，厘米"></label><label><span class="axis-y">Y</span><input type="number" id="py" step="1" aria-label="Y 位置，厘米"></label><label><span class="axis-z">Z</span><input type="number" id="pz" step="1" aria-label="Z 位置，厘米"></label></div><label class="switch-row"><span>贴合桌面 <small>可选，调整高度会自动解除</small></span><input id="grounded" type="checkbox" role="switch"><span class="switch"></span></label></div>
+      <div class="property-section"><div class="property-heading"><h3>旋转</h3><span>°</span></div><div class="input-row"><label><span class="axis-x">X</span><input type="number" id="rx" step="15" aria-label="绕 X 轴旋转，度"></label><label><span class="axis-y">Y</span><input type="number" id="ry" step="15" aria-label="绕 Y 轴旋转，度"></label><label><span class="axis-z">Z</span><input type="number" id="rz" step="15" aria-label="绕 Z 轴旋转，度"></label></div><div class="rotation-actions"><button id="turn-left" class="button small subtle">↶ 45°</button><button id="turn-right" class="button small subtle">↷ 45°</button><button id="reset-rotation" class="text-button">归零</button></div></div>
+      <div class="property-section"><div class="property-heading"><h3>模型尺寸</h3><span>cm</span></div><div class="input-row dimension-row"><label><span>宽 X</span><input type="number" id="dx" min="0.01" max="100000" step="1" aria-label="模型宽，厘米"></label><label><span>高 Y</span><input type="number" id="dy" min="0.01" max="100000" step="1" aria-label="模型高，厘米"></label><label><span>深 Z</span><input type="number" id="dz" min="0.01" max="100000" step="1" aria-label="模型深，厘米"></label></div><label class="checkbox-row"><input type="checkbox" id="uniform" checked>保持长宽高比例</label><div class="size-note" id="size-note">导入时为便于查看已缩放，请按真实尺寸校准。</div><button id="confirm-size" class="text-button">将当前尺寸标记为已校准</button></div>
+      <div class="property-section"><div class="property-heading"><h3>摆放辅助</h3></div><label class="checkbox-row"><input type="checkbox" id="snap">吸附到 1 cm / 15° 刻度</label><div class="object-actions"><button id="center-object" class="button subtle"><span data-icon="focus"></span>居中</button><button id="delete-object" class="button danger"><span data-icon="trash"></span>删除</button></div></div>
+    </div>
+    <div class="inspector-footer"><span data-icon="info"></span><p>初始桌面中心为原点，Y 轴向上。当前仅负责摆放，不判断碰撞或越界。</p></div>
+  </aside>
+</div>
+<footer class="statusbar"><span><i class="status-dot"></i><span id="status-text">准备就绪</span></span><span class="mouse-help">中键拖动：环绕 <i>·</i> Shift＋中键：平移 <i>·</i> 滚轮：缩放</span><span>1 单位 = 1 cm <i>·</i> WebGL 2</span></footer>
+<div id="toast" class="toast" role="status" hidden></div>
+<input id="file-input" type="file" accept=".glb" multiple hidden><input id="table-input" type="file" accept=".glb" hidden>
+<script type="module" src="./app.js"></script>
+<script>window.addEventListener('error', function(e){if(e.target && e.target.tagName === 'SCRIPT'){document.getElementById('fatal').hidden=false;document.getElementById('fatal-message').textContent='脚本未加载，请刷新页面。'}} ,true);</script>
+</body></html>
