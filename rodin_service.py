@@ -12,7 +12,7 @@ import threading
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import UUID, uuid4
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -21,9 +21,10 @@ API_BASE = 'https://api.hyper3d.com/api/v2/'
 
 
 class ServiceError(Exception):
-    def __init__(self, message, status=400):
+    def __init__(self, message, status=400, uncertain=False):
         super().__init__(message)
         self.status = status
+        self.uncertain = uncertain
 
 
 def load_api_key(root):
@@ -93,21 +94,22 @@ def provider_json(key, action, payload, content_type='application/json'):
         'Accept': 'application/json',
     })
     try:
-        with urlopen(request, timeout=90) as response:
+        with build_opener(NoRedirect).open(request, timeout=90) as response:
             data = response.read(1024 * 1024 + 1)
         if len(data) > 1024 * 1024:
-            raise ServiceError('Rodin 返回的数据过大。', 502)
+            raise ServiceError('Rodin 返回的数据过大。', 502, uncertain=True)
         result = json.loads(data)
     except HTTPError as error:
         messages = {401: 'Rodin 密钥无效或已撤销。', 403: 'Rodin 账户没有 API 访问权限。',
                     402: 'Rodin API 额度不足。', 429: 'Rodin 当前请求过多，请稍后查询。'}
-        raise ServiceError(messages.get(error.code, 'Rodin 请求失败，请在控制台核对任务。'), 502)
+        raise ServiceError(messages.get(error.code, 'Rodin 请求失败，请在控制台核对任务。'), 502,
+                           uncertain=error.code >= 500 or 300 <= error.code < 400)
     except (URLError, TimeoutError, OSError):
-        raise ServiceError('连接 Rodin 超时或网络不可用；不会自动重新提交付费任务。', 502)
+        raise ServiceError('连接 Rodin 超时或网络不可用；不会自动重新提交付费任务。', 502, uncertain=True)
     except (ValueError, UnicodeError):
-        raise ServiceError('Rodin 返回的数据无法解析，请在控制台核对任务。', 502)
+        raise ServiceError('Rodin 返回的数据无法解析，请在控制台核对任务。', 502, uncertain=True)
     if not isinstance(result, dict):
-        raise ServiceError('Rodin 返回的任务格式无效。', 502)
+        raise ServiceError('Rodin 返回的任务格式无效。', 502, uncertain=True)
     if result.get('error'):
         messages = {'API_INSUFFICIENT_FUNDS': 'Rodin API 额度不足。',
                     'API_NO_ACTIVE_SUBSCRIPTION': '请先开通 Rodin API 订阅。',
@@ -126,8 +128,12 @@ class NoRedirect(HTTPRedirectHandler):
 
 def download_glb(url):
     # 下载地址来自上游，但仍拒绝本机/内网 URL 和重定向，不向 CDN 转发密钥。
-    parts = urlparse(url)
-    if parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or parts.port not in (None, 443):
+    try:
+        parts = urlparse(url)
+        safe_url = parts.scheme == 'https' and parts.hostname and not parts.username and not parts.password and parts.port in (None, 443)
+    except (ValueError, TypeError):
+        safe_url = False
+    if not safe_url:
         raise ServiceError('Rodin 返回了不安全的下载地址。', 502)
     try:
         addresses = socket.getaddrinfo(parts.hostname, 443, type=socket.SOCK_STREAM)
@@ -153,6 +159,12 @@ class RodinService:
         self.jobs.mkdir(parents=True, exist_ok=True)
         self.models.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        # 上次进程中断时，不能判断上游是否扣费，保留记录并禁止自动重发。
+        for path in self.jobs.glob('*.json'):
+            job = json.loads(path.read_text(encoding='utf-8'))
+            if job.get('status') == 'submitting':
+                job.update(status='uncertain', error='上次提交期间服务中断，请先在 Rodin 控制台核对。')
+                self.save(job)
 
     def save(self, job):
         target = self.jobs / (job['id'] + '.json')
@@ -194,22 +206,34 @@ class RodinService:
                 if existing['fingerprint'] != fingerprint:
                     raise ServiceError('该任务编号已用于另一张照片。', 409)
                 return self.public(existing)
+            for entry in self.jobs.glob('*.json'):
+                existing = json.loads(entry.read_text(encoding='utf-8'))
+                if existing.get('fingerprint') == fingerprint and existing['status'] not in ('failed',):
+                    return self.public(existing)
             job = {'id': job_id, 'name': str(payload.get('name') or '照片模型')[:80],
                    'status': 'submitting', 'created': time.time(), 'fingerprint': fingerprint,
                    'error': '', 'consumed': None, 'checked': 0}
             self.save(job)
-            # 提交前保存任务编号；网络中断后不能自动重发，避免重复扣费。
-            try:
-                body, content_type = multipart_image(image, mime, filename)
-                result = provider_json(self.key, 'rodin', body, content_type)
-                if not result.get('uuid') or not result.get('jobs', {}).get('subscription_key'):
-                    raise ServiceError('提交结果不完整，请在 Rodin 控制台核对；不会自动重发。', 502)
-                job.update(status='queued', task_uuid=result['uuid'],
-                           subscription_key=result['jobs']['subscription_key'], consumed=result.get('consumed'))
-            except ServiceError as error:
-                job.update(status='uncertain', error=str(error))
-            self.save(job)
+            worker = threading.Thread(target=self._submit_job, args=(job, image, mime, filename), daemon=True)
+            worker.start()
             return self.public(job)
+
+    def _submit_job(self, job, image, mime, filename):
+        try:
+            body, content_type = multipart_image(image, mime, filename)
+            result = provider_json(self.key, 'rodin', body, content_type)
+            subscription = result.get('jobs')
+            if not result.get('uuid') or not isinstance(subscription, dict) or not subscription.get('subscription_key'):
+                raise ServiceError('提交结果不完整，请在 Rodin 控制台核对；不会自动重发。', 502, uncertain=True)
+            updates = dict(status='queued', task_uuid=result['uuid'],
+                           subscription_key=subscription['subscription_key'], consumed=result.get('consumed'))
+        except ServiceError as error:
+            updates = dict(status='uncertain' if error.uncertain else 'failed', error=str(error))
+        except Exception:
+            updates = dict(status='uncertain', error='提交期间发生异常，请先在 Rodin 控制台核对任务。')
+        with self.lock:
+            job.update(updates)
+            self.save(job)
 
     def refresh(self, job_id):
         with self.lock:
@@ -222,7 +246,12 @@ class RodinService:
             try:
                 if job['status'] != 'downloading':
                     response = provider_json(self.key, 'status', {'subscription_key': job['subscription_key']})
-                    statuses = [entry.get('status') for entry in response.get('jobs', [])]
+                    entries = response.get('jobs')
+                    if not isinstance(entries, list) or not entries or any(not isinstance(entry, dict) for entry in entries):
+                        raise ServiceError('Rodin 返回了无效的状态，将稍后重新查询。', 502)
+                    statuses = [entry.get('status') for entry in entries]
+                    if any(status not in ('Waiting', 'Generating', 'Done', 'Failed') for status in statuses):
+                        raise ServiceError('Rodin 返回未知状态，将稍后重新查询。', 502)
                     if 'Failed' in statuses:
                         job.update(status='failed', error='Rodin 生成失败，请在控制台查看详情。')
                     elif statuses and all(status == 'Done' for status in statuses):
@@ -232,7 +261,10 @@ class RodinService:
                         job['error'] = ''
                 if job['status'] == 'downloading':
                     result = provider_json(self.key, 'download', {'task_uuid': job['task_uuid']})
-                    item = next((item for item in result.get('list', []) if str(item.get('name', '')).lower().endswith('.glb')), None)
+                    items = result.get('list')
+                    if not isinstance(items, list):
+                        raise ServiceError('Rodin 尚未返回文件列表，稍后将重试下载。', 502)
+                    item = next((item for item in items if isinstance(item, dict) and str(item.get('name', '')).lower().endswith('.glb') and isinstance(item.get('url'), str)), None)
                     if not item:
                         raise ServiceError('Rodin 的结果还没有可用 GLB，稍后将重试下载。', 502)
                     model = download_glb(item['url'])
@@ -243,6 +275,10 @@ class RodinService:
                     job.update(status='ready', error='')
             except ServiceError as error:
                 job['error'] = str(error)
+                if error.status == 413:
+                    job['status'] = 'failed'
+            except OSError:
+                job['error'] = '无法保存模型，请检查磁盘剩余空间后重试下载。'
             self.save(job)
             return self.public(job)
 

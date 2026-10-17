@@ -5,7 +5,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import secrets
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 import webbrowser
 
 from rodin_service import RodinService, ServiceError, load_api_key
@@ -13,11 +13,22 @@ from rodin_service import RodinService, ServiceError, load_api_key
 MAX_REQUEST = 28 * 1024 * 1024
 
 
+class DeskVerseServer(ThreadingHTTPServer):
+    # 浏览器会并发请求 ES 模块，默认的 5 个连接排队位置不足。
+    request_queue_size = 64
+    daemon_threads = True
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, service, csrf, **kwargs):
         self.service = service
         self.csrf = csrf
         super().__init__(*args, **kwargs)
+
+    def end_headers(self):
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('Content-Security-Policy', "frame-ancestors 'none'")
+        super().end_headers()
 
     def local_request(self):
         port = self.server.server_address[1]
@@ -42,6 +53,8 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             self.local_request()
             path = urlparse(self.path).path
+            if any(part.startswith('.') for part in unquote(path).split('/') if part):
+                raise ServiceError('文件不存在。', 404)
             if path == '/api/generation/config':
                 return self.json_response({'configured': bool(self.service.key), 'csrf': self.csrf,
                                            'provider': 'Rodin', 'tier': 'Regular'})
@@ -68,7 +81,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         try:
             self.local_request()
-            if not secrets.compare_digest(self.headers.get('X-DeskVerse-Token', ''), self.csrf):
+            if not secrets.compare_digest(self.headers.get('X-DeskVerse-Token', '').encode('utf-8'), self.csrf.encode('utf-8')):
                 raise ServiceError('请求验证失败，请刷新页面。', 403)
             if urlparse(self.path).path != '/api/generation/jobs':
                 raise ServiceError('接口不存在。', 404)
@@ -87,7 +100,7 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ServiceError('请求内容损坏或接收超时。')
             if not isinstance(body, dict):
                 raise ServiceError('请求内容无效。')
-            self.json_response(self.service.submit(body), 201)
+            self.json_response(self.service.submit(body), 202)
         except ServiceError as error:
             self.json_response({'error': str(error)}, error.status)
 
@@ -101,7 +114,7 @@ def main():
     service = RodinService(root, load_api_key(root))
     handler = partial(Handler, service=service, csrf=secrets.token_urlsafe(32), directory=str(root / 'dist'))
     try:
-        server = ThreadingHTTPServer(('127.0.0.1', args.port), handler)
+        server = DeskVerseServer(('127.0.0.1', args.port), handler)
     except OSError:
         raise SystemExit('Port is occupied. Choose another port with --port.')
     address = 'http://127.0.0.1:' + str(args.port)

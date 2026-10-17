@@ -18,6 +18,6 @@ async function vendor(relative) {
     await vendor(path.posix.normalize(path.posix.join(path.posix.dirname(relative), match[1])));
   }
 }
-for (const entry of ['controls/OrbitControls.js','controls/TransformControls.js','loaders/GLTFLoader.js','loaders/DRACOLoader.js','loaders/KTX2Loader.js','libs/meshopt_decoder.module.js','utils/SkeletonUtils.js','environments/RoomEnvironment.js']) await vendor(entry);
+for (const entry of ['controls/OrbitControls.js','controls/TransformControls.js','loaders/GLTFLoader.js','loaders/DRACOLoader.js','loaders/KTX2Loader.js','libs/meshopt_decoder.module.js','utils/SkeletonUtils.js','environments/RoomEnvironment.js','math/OBB.js']) await vendor(entry);
 for (const dir of ['draco/gltf','basis']) await cp(root + '/examples/jsm/libs/' + dir, output + '/addons/libs/' + dir, {recursive:true});
 console.log('Vendored Three.js r180 and local decoders:', seen.size, 'modules');
