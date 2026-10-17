@@ -1,0 +1,15 @@
+# Node（仅开发/测试需要，dist/ 是已构建产物，必须保留在仓库里）
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 编辑器与系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
