@@ -15,7 +15,7 @@ export const RENDER_SIZES = [
   {id: '4k', label: '4K · 3840 × 2160', width: 3840, height: 2160},
 ];
 
-const FIT_MARGIN = 1.08;
+const FIT_MARGIN = 1.025;
 const MIN_ASPECT = 1e-8;
 const MIN_DEPTH = 1e-3;
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
@@ -44,6 +44,28 @@ function cornersOf(box) {
     new THREE.Vector3(max.x, min.y, min.z), new THREE.Vector3(max.x, min.y, max.z),
     new THREE.Vector3(max.x, max.y, min.z), new THREE.Vector3(max.x, max.y, max.z),
   ];
+}
+
+// 按可见部件取景，避免把柜门、柜顶与椅子之间并不存在的整柜包围盒角落算进画面。
+function framingPoints(roots, fallback) {
+  const points = [];
+  for (const root of roots) {
+    root.updateWorldMatrix(true, true);
+    root.traverseVisible(mesh => {
+      if (!mesh.isMesh) return;
+      let box;
+      if (mesh.isSkinnedMesh || mesh.isInstancedMesh) {
+        mesh.computeBoundingBox();
+        box = mesh.boundingBox;
+      } else {
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        box = mesh.geometry.boundingBox;
+      }
+      if (!box || box.isEmpty()) return;
+      for (const point of cornersOf(box)) points.push(point.applyMatrix4(mesh.matrixWorld));
+    });
+  }
+  return points.length ? points : cornersOf(fallback);
 }
 
 function validAspect(aspect) {
@@ -82,19 +104,25 @@ function closestPerspectiveDistance(camera, center, points, aspect) {
   const forward = center.clone().sub(camera.position).normalize();
   const right = forward.clone().cross(camera.up).normalize();
   const up = right.clone().cross(forward).normalize();
-  const tanVertical = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const tanVertical = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) / FIT_MARGIN;
   const tanHorizontal = tanVertical * aspect;
   if (!Number.isFinite(tanVertical) || tanVertical <= 0 || tanHorizontal <= 0) fail('相机视场角无效。');
-  let distance = MIN_DEPTH;
+  let maxX = -Infinity, minX = Infinity, maxY = -Infinity, minY = Infinity, nearest = -Infinity;
+  const offset = new THREE.Vector3();
   for (const point of points) {
-    const offset = point.clone().sub(center);
-    const towardCamera = offset.dot(direction);
-    distance = Math.max(distance,
-      towardCamera + FIT_MARGIN * Math.abs(offset.dot(right)) / tanHorizontal,
-      towardCamera + FIT_MARGIN * Math.abs(offset.dot(up)) / tanVertical);
+    offset.copy(point).sub(center);
+    const depth = offset.dot(direction), x = offset.dot(right), y = offset.dot(up);
+    maxX = Math.max(maxX, x + tanHorizontal * depth);
+    minX = Math.min(minX, x - tanHorizontal * depth);
+    maxY = Math.max(maxY, y + tanVertical * depth);
+    minY = Math.min(minY, y - tanVertical * depth);
+    nearest = Math.max(nearest, depth);
   }
-  camera.position.copy(center).addScaledVector(direction, distance);
-  camera.lookAt(center);
+  // 每个部件在水平、垂直视锥内给出一个允许区间；求交后直接得到最近距离和居中偏移。
+  const distance = Math.max((maxX - minX) / (2 * tanHorizontal), (maxY - minY) / (2 * tanVertical), nearest + MIN_DEPTH * 2);
+  const target = center.clone().addScaledVector(right, (maxX + minX) / 2).addScaledVector(up, (maxY + minY) / 2);
+  camera.position.copy(target).addScaledVector(direction, distance);
+  camera.lookAt(target);
   camera.updateMatrixWorld(true);
   return camera;
 }
@@ -125,7 +153,7 @@ function adaptCurrentOrthographic(camera, aspect) {
 }
 
 
-function createFixedPerspective(sourceCamera, box, preset, aspect) {
+function createFixedPerspective(sourceCamera, box, preset, aspect, points) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const radius = Math.max(size.length() * .5, 1);
@@ -138,8 +166,8 @@ function createFixedPerspective(sourceCamera, box, preset, aspect) {
   camera.up.copy(WORLD_UP);
   camera.lookAt(center);
   camera.updateMatrixWorld(true);
-  closestPerspectiveDistance(camera, center, cornersOf(box), aspect);
-  return setPerspectivePlanes(camera, cornersOf(box));
+  closestPerspectiveDistance(camera, center, points, aspect);
+  return setPerspectivePlanes(camera, points);
 }
 
 function createTopCamera(box, aspect) {
@@ -169,14 +197,15 @@ function cloneCurrentCamera(sourceCamera, aspect) {
   return adaptCurrentOrthographic(camera, aspect);
 }
 
-export function createRenderCamera(sourceCamera, bounds, preset = 'current', aspect = 16 / 9) {
+export function createRenderCamera(sourceCamera, bounds, preset = 'current', aspect = 16 / 9, roots = []) {
   const box = readBounds(bounds);
   validAspect(aspect);
   if (!RENDER_PRESETS.some(entry => entry.id === preset)) fail(`不支持的视角“${preset}”。`);
   cameraKind(sourceCamera);
   if (preset === 'current') return cloneCurrentCamera(sourceCamera, aspect);
-  if (preset === 'top') return createTopCamera(box, aspect);
-  return createFixedPerspective(sourceCamera, box, preset, aspect);
+  const points = framingPoints(roots, box), visibleBounds = new THREE.Box3().setFromPoints(points);
+  if (preset === 'top') return createTopCamera(visibleBounds, aspect);
+  return createFixedPerspective(sourceCamera, visibleBounds, preset, aspect, points);
 }
 
 function rendererLimit(context, width, height) {

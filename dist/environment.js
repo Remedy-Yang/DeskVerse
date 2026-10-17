@@ -14,8 +14,9 @@ export function createStudioFloor(renderer) {
       context.bezierCurveTo(x+170,y+offset+Math.sin(line+row)*4,x+340,y+offset-3,x+512,y+offset);context.stroke();
     }
   }
-  const map=new THREE.CanvasTexture(image);map.colorSpace=THREE.SRGBColorSpace;map.wrapS=map.wrapT=THREE.RepeatWrapping;map.repeat.set(11,11);map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(2200,2200),new THREE.MeshStandardMaterial({map,roughness:.92,metalness:0}));
+  const floorSize=100000,repeat=floorSize/200;
+  const map=new THREE.CanvasTexture(image);map.colorSpace=THREE.SRGBColorSpace;map.wrapS=map.wrapT=THREE.RepeatWrapping;map.repeat.set(repeat,repeat);map.offset.set(.5,.5);map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(floorSize,floorSize),new THREE.MeshStandardMaterial({map,roughness:.92,metalness:0}));
   floor.name='studio-solid-floor';floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;
   return floor;
 }

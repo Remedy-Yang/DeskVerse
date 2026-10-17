@@ -112,3 +112,30 @@ test('Current orthographic clone preserves center and expands aspect without fit
   assert.equal(clone.far, source.far);
 });
 
+
+test('Preset framing fills the image with visible parts without clipping an open door or chair', () => {
+  const root = new T.Group(),material = new T.MeshBasicMaterial();
+  const body = new T.Mesh(new T.BoxGeometry(120,180,40),material);
+  const door = new T.Mesh(new T.BoxGeometry(3,110,70),material);
+  const chair = new T.Mesh(new T.BoxGeometry(40,85,40),material);
+  const hidden = new T.Mesh(new T.BoxGeometry(100,100,100),material);
+  body.position.set(0,90,0);door.position.set(-90,55,40);chair.position.set(25,42.5,80);
+  hidden.position.set(6000,0,-3000);hidden.visible=false;
+  root.add(body,door,chair,hidden);root.position.set(800,-76,-400);root.rotation.y=.3;root.scale.set(1.1,.9,1.2);
+  root.updateWorldMatrix(true,true);
+  const bounds = new T.Box3().setFromObject(root,true),points = [];
+  root.traverseVisible(mesh => {
+    if (!mesh.isMesh) return;
+    const positions = mesh.geometry.getAttribute('position');
+    for (let index=0;index<positions.count;index++) points.push(new T.Vector3().fromBufferAttribute(positions,index).applyMatrix4(mesh.matrixWorld));
+  });
+  for (const preset of ['front','left','right']) for (const aspect of [16/9,1,9/16]) {
+    const camera = createRenderCamera(sourcePerspective(),bounds,preset,aspect,[root]);
+    const projected = points.map(point=>point.clone().project(camera));
+    for (const point of projected) assert.ok(Math.max(Math.abs(point.x),Math.abs(point.y),Math.abs(point.z))<=1,'visible geometry must not be cropped');
+    const minX=Math.min(...projected.map(point=>point.x)),maxX=Math.max(...projected.map(point=>point.x));
+    const minY=Math.min(...projected.map(point=>point.y)),maxY=Math.max(...projected.map(point=>point.y));
+    assert.ok(Math.max(maxX-minX,maxY-minY)>1.8,`${preset} wastes the frame on empty assembly bounds`);
+    assert.ok(Math.abs(maxX-minX>maxY-minY?minX+maxX:minY+maxY)<.04,'the dominant subject span must be centered');
+  }
+});
