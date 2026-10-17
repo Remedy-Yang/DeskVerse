@@ -43,6 +43,15 @@ export function setDimension(record, axis, value, uniform=true) {
   if(uniform)record.root.scale.multiplyScalar(value/old);
   else record.root.scale[axis]=value/record.baseSize[axis];
 }
+export function estimateSeatHeight(statureCm, ratio=.25) {
+  if(!Number.isFinite(statureCm)||!Number.isFinite(ratio)) throw new Error('身高和坐高比例必须是有效数字。');
+  // 按人体比例初步估算，并允许用户小幅调整。
+  const stature=THREE.MathUtils.clamp(statureCm,120,220);
+  const minCm=Math.max(30,stature*.23+2);
+  const maxCm=Math.min(70,stature*.27+2);
+  const cm=THREE.MathUtils.clamp(stature*THREE.MathUtils.clamp(ratio,.23,.27)+2,minCm,maxCm);
+  return {statureCm:stature,cm,minCm,maxCm,ratio:(cm-2)/stature};
+}
 export function recordState(record) {
   const bounds=boundsOf(record.root);
   return {id:record.id,name:record.name,sourceFile:record.sourceFile,role:record.role,demo:record.demo,locked:!!record.locked,calibrated:record.calibrated,grounded:record.grounded,surfaceY:record.surfaceY??null,

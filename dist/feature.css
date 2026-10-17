@@ -20,9 +20,12 @@
 .seat-view-button svg{height:13px;width:13px}
 .seat-view-button.active{background:#edf0fc;border-color:#d7def5;color:#6177c4}
 .seat-fields{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:7px 0}
+.seat-fields.person-field{grid-template-columns:1fr}
 .seat-fields label{display:flex;align-items:center;gap:4px;padding:4px 5px;border:1px solid #e4e8ef;border-radius:4px;color:#9aa4b1;font-size:9px}
 .seat-fields input{width:100%;min-width:0;border:0;outline:none;background:transparent;color:#52627a;font-size:10px;text-align:right;appearance:textfield}
 .seat-fields input::-webkit-inner-spin-button{appearance:none}
+.seat-view-block input[type=range]{display:block;width:100%;height:15px;margin:2px 0;accent-color:#788dd0}
+.seat-height-range-note{margin:0 0 6px;color:#a0a9b4;font-size:8px;text-align:right;font-variant-numeric:tabular-nums}
 .seat-distance-heading{display:flex;align-items:center;justify-content:space-between;color:#9aa4b1;font-size:9px}
 .seat-distance-heading output{color:#52627a;font-variant-numeric:tabular-nums}
 .surface-readout{position:absolute;left:12px;top:52px;z-index:4;min-width:150px;padding:8px 10px;background:#ffffffef;border:1px solid #d8e0f1;border-radius:6px;box-shadow:0 4px 18px #34466415;color:#66758d;font-size:10px;pointer-events:none}
