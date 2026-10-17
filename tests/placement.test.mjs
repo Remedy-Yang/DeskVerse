@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {readFile} from 'node:fs/promises';
+import {normalizeModel} from '../dist/core.js';
+import {prepareDeskModel} from '../dist/drawers.js';
 import {placementReport} from '../dist/placement.js';
 
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-5,`${actual} != ${expected}`);
@@ -11,6 +15,14 @@ function record(id,dimensions=[10,5,10],position=[0,0,0],extra={}){
 }
 const report=(records,selectedId,options={})=>placementReport(records,{selectedId,...options});
 const area=polygon=>Math.abs(polygon.reduce((sum,p,i)=>{const q=polygon[(i+1)%polygon.length];return sum+p[0]*q[1]-q[0]*p[1];},0))/2;
+function topMesh(rectangles,indexed=false,name='Desk_top_with_rounded_return__asset'){
+ const positions=[],indices=[],lookup=new Map();
+ const vertex=(x,z)=>{if(!indexed){positions.push(x,0,z);return positions.length/3-1;}const key=`${x},${z}`;if(!lookup.has(key)){lookup.set(key,positions.length/3);positions.push(x,0,z);}return lookup.get(key);};
+ const triangle=(a,b,c)=>{const ia=vertex(...a),ib=vertex(...b),ic=vertex(...c);if(indexed)indices.push(ia,ib,ic);};
+ for(const [minX,minZ,maxX,maxZ] of rectangles){triangle([minX,minZ],[minX,maxZ],[maxX,minZ]);triangle([maxX,minZ],[minX,maxZ],[maxX,maxZ]);}
+ const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));if(indexed)geometry.setIndex(indices);geometry.computeBoundingBox();return new T.Mesh(geometry);
+}
+function surfaceTable(rectangles,indexed=false){const table=record('desk',[200,2,120],[0,0,0],{role:'table'}),mesh=topMesh(rectangles,indexed);mesh.name='Desk_top_with_rounded_return__asset';table.root.add(mesh);return table;}
 
 test('Projected hull follows rotation and nonuniform scale instead of world yaw AABB',()=>{
  const object=record('rotated',[12,4,2],[10,0,-7]);object.root.scale.set(2,3,4);object.root.rotation.y=Math.PI/4;
@@ -72,11 +84,57 @@ test('Desktop uses the named tabletop world box, not the whole desk cabinet',()=
  assert.equal(selectedTable.boundary.state,'na');assert.equal(selectedTable.size.state,'na');assert.equal(selectedTable.conflict.state,'na');
 });
 
+test('Named tabletop preserves a concave loop and welds indexed and seam-duplicated faces',()=>{
+ const rectangles=[[-10,-10,2,10],[2,-10,10,-2]];
+ for(const indexed of [false,true]){
+  const table=surfaceTable(rectangles,indexed),insideNotch=record('notch',[2,2,2],[6,0,6]);
+  const result=report([table,insideNotch],'notch',{table});
+ assert.equal(result.surface.shapeSource,'named-top-mesh');assert.equal(result.surface.rings.length,1);assert.ok(result.surface.polygon.length>4);near(area(result.surface.polygon),304);assert.equal(result.selected.boundary.state,'warning');
+ }
+});
+
+test('Desktop outline cache reuses topology while applying current world transforms',()=>{
+ const table=surfaceTable([[-10,-10,2,10],[2,-10,10,-2]]),first=report([],null,{table}).surface;
+ table.root.position.set(30,4,-20);table.root.scale.set(2,3,4);const moved=report([],null,{table}).surface;
+ assert.equal(moved.shapeSource,'named-top-mesh');near(area(moved.polygon),area(first.polygon)*8);assert.ok(moved.polygon.some(([x,z])=>Math.abs(x-10)<1e-5&&Math.abs(z-20)<1e-5));
+});
+
+test('Concave surface warns when an object edge bridges a notch despite interior vertices',()=>{
+ const table=surfaceTable([[-10,-10,-4,10],[4,-10,10,10],[-4,-10,4,0]]),bridge=record('bridge',[16,2,2],[0,0,5]);
+ const result=report([table,bridge],'bridge',{table});
+ assert.equal(result.surface.shapeSource,'named-top-mesh');assert.equal(result.selected.boundary.state,'warning');assert.equal(result.selected.size.state,'ok');
+});
+
+test('A footprint covering a desktop hole is outside even when every vertex is in the outer ring',()=>{
+ const table=surfaceTable([[-10,-10,10,-2],[-10,2,10,10],[-10,-2,-2,2],[2,-2,10,2]]),cover=record('cover',[8,2,8],[0,0,0]);
+ const result=report([table,cover],'cover',{table});
+ assert.equal(result.surface.rings.length,2);assert.equal(result.selected.boundary.state,'warning');
+});
+
 test('Fallback footprints use table world XZ center and a labelled reference surface',()=>{
  const table=record('desk',[20,80,20],[30,-80,40],{role:'table',surfaceFootprintCm:[160,60]});
+ table.root.clear();
  const result=report([table],'desk',{table,surfaceY:8});
  assert.deepEqual(result.surface.min,[-50,8,10]);assert.deepEqual(result.surface.max,[110,8,70]);assert.equal(result.surface.estimated,true);
  const empty=report([],null,{surfaceY:500});assert.equal(empty.surface.kind,'reference');assert.deepEqual(empty.surface.min,[-70,0,-37.5]);assert.deepEqual(empty.surface.max,[70,0,37.5]);assert.deepEqual(empty.items,[]);
+});
+
+test('Unnamed single-surface desk derives its measured top outline',()=>{
+ const table=record('desk',[20,2,20],[5,0,7],{role:'table'}),result=report([],null,{table});
+ assert.equal(result.surface.shapeSource,'inferred-top-mesh');assert.equal(result.surface.estimated,false);assert.equal(result.surface.polygon.length,4);assert.deepEqual(result.surface.polygon.map(([x,z])=>[x,z]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]),[[-5,-3],[-5,17],[15,-3],[15,17]]);
+});
+
+test('Mirrored, sloped and conical surfaces are not labelled as measured horizontal tabletops',()=>{
+ const mirrored=record('mirrored',[20,2,20],[0,0,0],{role:'table'});mirrored.root.scale.y=-1;
+ const sloped=record('sloped',[20,2,20],[0,0,0],{role:'table'});sloped.root.rotation.x=.2;
+ const cone=record('cone',[20,20,20],[0,0,0],{role:'table'});cone.root.children[0].geometry=new T.ConeGeometry(10,20,12);
+ for(const table of [mirrored,sloped,cone]){const surface=report([],null,{table}).surface;assert.equal(surface.shapeSource,'estimated-footprint');assert.equal(surface.estimated,true);}
+});
+
+test('Replacing a same-sized position attribute invalidates cached desktop topology',()=>{
+ const table=surfaceTable([[-10,-10,10,10]]),mesh=table.root.children.at(-1),replacement=topMesh([[-20,-20,20,20]]).geometry;
+ mesh.geometry.setAttribute('position',replacement.getAttribute('position'));mesh.geometry.computeBoundingBox();
+ const surface=report([],null,{table}).surface;assert.equal(surface.shapeSource,'named-top-mesh');assert.equal(Math.max(...surface.polygon.map(point=>point[0])),20);
 });
 
 test('Drawer scope checks actual owning interior including its available height',()=>{
@@ -117,4 +175,13 @@ test('Invalid dimensions and empty geometry cannot produce a safe size or confli
  assert.equal(invalid.boundary.state,'na');assert.equal(invalid.size.state,'warning');assert.equal(invalid.conflict.state,'na');
  const empty={...record('empty'),root:new T.Group()},result=report([empty],'empty');
  assert.deepEqual(result.items[0].polygon,[]);assert.equal(result.items[0].minY,null);assert.equal(result.items[0].maxY,null);assert.equal(result.selected.conflict.state,'na');assert.deepEqual(JSON.parse(JSON.stringify(result)),result);
+});
+
+test('Real desk GLB exposes the curved named desktop outline',async()=>{
+ const bytes=await readFile(new URL('../dist/assets/desk-real.glb',import.meta.url)),loader=new GLTFLoader();
+ loader.register(()=>({name:'placement-material',loadMaterial:()=>Promise.resolve(new T.MeshBasicMaterial())}));
+ const gltf=await loader.parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+ const geometry=normalizeModel(prepareDeskModel(gltf.scene),180),table={id:'real-desk',name:'真实桌',role:'table',calibrated:true,root:geometry.root,baseSize:geometry.baseSize};
+ const surface=report([],null,{table}).surface;
+ assert.equal(surface.shapeSource,'named-top-mesh');assert.ok(surface.rings.length>=1);assert.ok(surface.polygon.length>4);assert.ok(area(surface.polygon)>0);assert.ok(surface.max[1]>surface.min[1]);
 });

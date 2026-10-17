@@ -920,3 +920,9 @@ body[data-scene-tone="dark"] .atelier-heading > small,
 body[data-scene-tone="dark"] .viewport-label > span:not(.live-dot),
 body[data-scene-tone="dark"] #scene-hint,
 body[data-scene-tone="dark"] .optical-scale { color: #c1cad6; text-shadow: 0 1px 5px #0008; }
+
+/* 二维拖动由稳定 SVG 根节点捕获指针；物品移动时不滚动侧栏。 */
+.plan-map[data-plan-draggable="true"] .plan-object { cursor: grab; }
+.plan-map.plan-dragging, .plan-map.plan-dragging * { cursor: grabbing; user-select: none; }
+.plan-map .plan-object.is-dragging .plan-item { stroke-width: 2.8; fill-opacity: .4; }
+.projection-switch button { padding-left: 4px; padding-right: 4px; }
