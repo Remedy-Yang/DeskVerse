@@ -13,6 +13,7 @@ try{
  await page.route('**/api/generation/**',route=>route.fulfill({json:route.request().url().endsWith('/config')?{configured:false,csrf:'test'}:{jobs:[]}}));
  await page.goto(process.env.DESKVERSE_URL||'http://127.0.0.1:8002',{waitUntil:'networkidle'});
  await page.waitForFunction(()=>window.deskverse?.getState().drawers.length===4&&document.getElementById('loading').hidden,null,{timeout:60000});
+ await page.locator('[data-panel-tab="furniture"]').click();
  const state=()=>page.evaluate(()=>window.deskverse.getState());
  const initial=await state();const table=initial.objects.find(item=>item.role==='table');
  assert.ok(Math.abs(table.dimensionsCm[1]-180)<.001);assert.ok(Math.abs(table.dimensionsCm[2]-85)<.001);assert.equal(initial.surface.heightCm,0);
@@ -43,8 +44,8 @@ try{
  await page.locator('#dy').fill('3.9');await page.locator('#dy').dispatchEvent('change');await page.locator('#drawer-store').click();
  const collision=await page.evaluate(id=>window.deskverse.setTransform(id,{position:[0,0,0]}),stored.id);assert.equal(collision.accepted,true);assert.equal(collision.collision.blocked,false);assert.deepEqual((await state()).objects.at(-1).position,[0,0,0]);assert.equal((await state()).objects.at(-1).storage,null);
  await page.locator('#drawer-store').click();await page.locator('#drawer-focus').click();
- const canvas=page.locator('#viewport canvas'),render=PNG.sync.read(await canvas.screenshot());let colored=0;for(let i=0;i<render.data.length;i+=4)if(Math.abs(render.data[i]-241)+Math.abs(render.data[i+1]-243)+Math.abs(render.data[i+2]-246)>80)colored++;assert.ok(colored>1000);
- await page.setViewportSize({width:390,height:844});await page.locator('#drawer-controls').scrollIntoViewIfNeeded();
+ const canvas=page.locator('#viewport canvas'),render=PNG.sync.read(await canvas.screenshot()),background=render.data.subarray(0,3);let colored=0;for(let i=0;i<render.data.length;i+=4)if(Math.abs(render.data[i]-background[0])+Math.abs(render.data[i+1]-background[1])+Math.abs(render.data[i+2]-background[2])>80)colored++;assert.ok(colored>1000);
+ await page.setViewportSize({width:390,height:844});await page.locator('#toggle-assets').click();await page.locator('#drawer-controls').scrollIntoViewIfNeeded();
  await page.screenshot({path:resolve(output,'drawer-mobile.png'),fullPage:true});
  const fit=await page.locator('#drawer-controls').evaluate(element=>({scroll:element.scrollWidth,client:element.clientWidth,children:[...element.children].map(child=>({id:child.id,width:child.getBoundingClientRect().width,scroll:child.scrollWidth}))}));assert.ok(fit.scroll<=fit.client+1,JSON.stringify(fit));
  await page.setViewportSize({width:1440,height:1000});

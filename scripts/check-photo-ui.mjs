@@ -54,7 +54,7 @@ try{
  assert.equal(await page.locator('.generation-job a').getAttribute('download'),'DeskVerse-'+[...jobs.keys()][0]+'.glb');
  await page.screenshot({path:resolve(output,'photo-result-desktop.png'),fullPage:true});
  const canvas=page.locator('#viewport canvas');const rendered=PNG.sync.read(await canvas.screenshot());let nonblank=0;
- for(let index=0;index<rendered.data.length;index+=4){if(Math.abs(rendered.data[index]-241)+Math.abs(rendered.data[index+1]-243)+Math.abs(rendered.data[index+2]-246)>75)nonblank++;}
+ const background=rendered.data.subarray(0,3);for(let index=0;index<rendered.data.length;index+=4){if(Math.abs(rendered.data[index]-background[0])+Math.abs(rendered.data[index+1]-background[1])+Math.abs(rendered.data[index+2]-background[2])>75)nonblank++;}
  assert.ok(nonblank>1000,'3D canvas must contain visible scene pixels');
  // 刷新恢复任务，但已导入过的任务不再次自动创建对象。
  await page.reload({waitUntil:'networkidle'});await page.waitForFunction(()=>window.deskverse?.getState().objects.length===3&&document.getElementById('loading').hidden,null,{timeout:60000});
@@ -67,7 +67,7 @@ try{
  const mobile=await context.newPage();await mobile.setViewportSize({width:390,height:844});mobile.on('pageerror',error=>consoleErrors.push(error.message));
  await mobile.goto(base,{waitUntil:'networkidle'});
  await mobile.waitForFunction(()=>window.deskverse?.getState().objects.length===3&&document.getElementById('loading').hidden,null,{timeout:60000});
- await mobile.locator('#photo-open').click();await mobile.locator('#photo-input').setInputFiles('deskmodels/杯子/尺寸图.jpg');await mobile.locator('#photo-preview').evaluate(image=>image.decode());
+ await mobile.locator('#toggle-assets').click();await mobile.locator('#photo-open').click();await mobile.locator('#photo-input').setInputFiles('deskmodels/杯子/尺寸图.jpg');await mobile.locator('#photo-preview').evaluate(image=>image.decode());
  const fit=await mobile.locator('#photo-dialog').evaluate(element=>{const box=element.getBoundingClientRect();return {left:box.left,right:box.right,width:window.innerWidth,scroll:element.scrollWidth,client:element.clientWidth};});
  assert.ok(fit.left>=0&&fit.right<=fit.width&&fit.scroll<=fit.client+1,'Mobile dialog must fit viewport without horizontal overflow');
  await mobile.screenshot({path:resolve(output,'photo-dialog-mobile.png'),fullPage:true});

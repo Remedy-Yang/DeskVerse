@@ -21,6 +21,7 @@ try{
  await page.waitForFunction(()=>window.deskverse?.getState().objects.length===3&&document.getElementById('loading').hidden,null,{timeout:60000});
  const state=()=>page.evaluate(()=>window.deskverse.getState()),initial=await state(),chair=initial.objects.find(r=>r.name==='椅子');
  assert.equal(initial.collision.mode,'warn');
+ await page.locator('[data-panel-tab="furniture"]').click();
  await page.selectOption('#drawer-select','right-drawer-1');await page.locator('#drawer-open').click();await page.waitForFunction(()=>window.deskverse.getState().drawers[1].opening===1);
  assert.equal((await state()).collision.blocked,false);assert.equal((await state()).collision.detected,true);
  await page.screenshot({path:resolve(output,'collision-warns-free-drawer.png'),fullPage:true});
@@ -29,6 +30,7 @@ try{
  assert.equal(moved.accepted,true);assert.equal(moved.collision.blocked,false);assert.equal(moved.collision.detected,true);
  const freelyMoved=(await state()).objects.find(o=>o.id===chair.id);assert.deepEqual(freelyMoved.position,[8,-100,-150]);near(freelyMoved.rotation[1],35);assert.deepEqual(freelyMoved.scale,[1.2,1.2,1.2]);
  await page.locator('#undo').click();assert.deepEqual((await state()).objects.find(o=>o.id===chair.id).position,chair.position);
+ await page.locator('[data-panel-tab="assets"]').click();
  await page.locator('.generation-job button').click();await page.waitForFunction(()=>window.deskverse.getState().objects.length===4&&document.getElementById('loading').hidden,null,{timeout:60000});
  let photo=(await state()).objects.at(-1),photoId=photo.id;
  assert.equal(photo.referenceSize.category,'can');assert.equal(photo.calibrated,false);assert.deepEqual(photo.dimensionsCm.map(n=>+n.toFixed(3)),[6.6,12.2,6.6]);near(photo.worldBoundsCm.max[1]-photo.worldBoundsCm.min[1],12.2);near(photo.worldBoundsCm.min[1],0);
@@ -46,7 +48,7 @@ try{
  const overlap=await page.evaluate(id=>window.deskverse.setTransform(id,{position:[0,0,0]}),photoId);assert.equal(overlap.accepted,true);assert.equal(overlap.collision.detected,true);assert.equal(overlap.collision.blocked,false);assert.deepEqual((await state()).objects.at(-1).position,[0,0,0]);assert.doesNotMatch(await page.locator('#collision-status').innerText(),/已限制|已阻止|拦截/);
  await page.evaluate(id=>window.deskverse.setTransform(id,{position:[200,0,200]}),photoId);await page.evaluate(id=>window.deskverse.setTransform(id,{position:[210,0,200]}),photoId);assert.equal((await state()).collision.detected,false);
  await page.evaluate(id=>window.deskverse.setTransform(id,{position:[35,0,0]}),photoId);await page.locator('#view-focus').click();await page.waitForTimeout(1000);await page.screenshot({path:resolve(output,'upright-photo-reference-sizes.png'),fullPage:true});
- await page.setViewportSize({width:390,height:844});await page.locator('#reference-category').scrollIntoViewIfNeeded();await page.screenshot({path:resolve(output,'reference-mobile.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.locator('#toggle-inspector').click();await page.locator('#reference-category').scrollIntoViewIfNeeded();await page.screenshot({path:resolve(output,'reference-mobile.png'),fullPage:true});
  const fit=await page.locator('.reference-section').evaluate(element=>element.scrollWidth<=element.clientWidth+1);assert.ok(fit);
  await page.setViewportSize({width:1440,height:1000});await page.reload({waitUntil:'networkidle'});await page.waitForFunction(()=>window.deskverse?.getState().objects.length===3&&document.getElementById('loading').hidden,null,{timeout:60000});
  await page.locator('.generation-job button').click();await page.waitForFunction(()=>window.deskverse.getState().objects.length===4);assert.equal((await state()).objects.at(-1).referenceSize.category,'can');
