@@ -45,7 +45,7 @@ export function setDimension(record, axis, value, uniform=true) {
 }
 export function recordState(record) {
   const bounds=boundsOf(record.root);
-  return {id:record.id,name:record.name,sourceFile:record.sourceFile,role:record.role,demo:record.demo,calibrated:record.calibrated,grounded:record.grounded,
+  return {id:record.id,name:record.name,sourceFile:record.sourceFile,role:record.role,demo:record.demo,locked:!!record.locked,calibrated:record.calibrated,grounded:record.grounded,surfaceY:record.surfaceY??null,
     position:record.root.position.toArray(),rotation:record.root.rotation.toArray().slice(0,3).map(THREE.MathUtils.radToDeg),rotationOrder:'XYZ',
     scale:record.root.scale.toArray(),dimensionsCm:getDimensions(record).toArray(),
     worldBoundsCm:{min:bounds.min.toArray(),max:bounds.max.toArray()}};
