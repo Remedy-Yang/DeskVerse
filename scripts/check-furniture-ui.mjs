@@ -40,7 +40,7 @@ try{
  await page.locator('#door-open').click();await page.waitForTimeout(600);assert.equal((await state()).doors[0].opening,1);
  await page.locator('#seat-view').click();await page.waitForTimeout(250);assert.equal(await page.locator('#seat-view').getAttribute('aria-pressed'),'true');await page.locator('#seat-view').click();assert.equal(await page.locator('#seat-view').getAttribute('aria-pressed'),'false');
  await page.locator('#seat-view').click();await page.keyboard.press('Escape');assert.equal(await page.locator('#seat-view').getAttribute('aria-pressed'),'false');await page.locator('.view-distance summary').click();
- await page.locator('#view-top').click();assert.equal(await page.locator('#view-distance-range').inputValue(),'240');
+ await page.locator('#view-top').click();assert.equal((await state()).view.cameraType,'OrthographicCamera');
  await page.locator('#chair-pull').click();await page.locator('#chair-position-range').fill('-20');await page.locator('#chair-position-range').dispatchEvent('input');const chairAfterPush=(await state()).objects.find(o=>o.name==='椅子');assert.ok(chairAfterPush.position[2]<chair.position[2]+35);
  // Place a real, calibrated mouse into a right drawer and verify X travel.
  await page.locator('#file-input').setInputFiles('deskmodels/鼠标/base_basic_pbr.glb');
