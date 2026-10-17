@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-DeskVerse Studio：纯浏览器端三维桌面摆放工作台。无后端、无 CDN、无构建步骤。团队分工「三」的交付物。
+DeskVerse Studio：浏览器端三维桌面摆放工作台。基础摆放无后端、无 CDN、无构建步骤；另有开发中的 Python 本机 Rodin 代理，照片建模入口尚未启用。团队分工「三」的交付物。
 
 **最重要的一点：`dist/` 不是构建产物目录，它同时是源码目录和交付物目录。** 没有 bundler、没有 `npm run build`。浏览器通过 `dist/index.html` 里的 importmap 直接解析裸模块名。
 
@@ -9,7 +9,7 @@ DeskVerse Studio：纯浏览器端三维桌面摆放工作台。无后端、无 
 用途：导入 `.glb` 模型 → 在网页中移动/旋转/缩放 → 输入真实尺寸校准 → 摆放并贴合桌面 → 导出布局 JSON。
 
 - 场景数据全部在浏览器本机解析，不上传服务器；刷新即清空。
-- 离线可用：Three.js r180 与 Draco / Meshopt / KTX2 解码器已 vendored 进 `dist/vendor/three/`。
+- 离线可用：Three.js r180 与 Draco / Meshopt / KTX2 解码器已 vendored 进 `dist/vendor/three/`；Tesseract.js worker、LSTM 核心和简体中文模型位于 `dist/vendor/ocr/`。
 - 对外契约是 `window.deskverse`（供队友「4 号」做越界/重叠判断接入），见 `README.md` 的「给 4 号同学的接口」。
 
 ## Git Collaboration Workflow
@@ -107,6 +107,7 @@ graph LR
 | `dist/` | 交付物 + 源码。`index.html` / `app.js` / `core.js` / `style.css` / `feature.css` 全部手写。 |
 | `dist/assets/` | GLB。`demo-*.glb` 由脚本生成；`desk-real.glb`(41 MiB)、`monitor-real.glb`(28 MiB) 为用户提供，**不要**交给脚本覆盖。 |
 | `dist/vendor/three/` | **生成物**，由 `scripts/vendor.mjs` 产出。禁止手改。 |
+| `dist/vendor/ocr/` | **生成物**，由 `scripts/vendor-ocr.mjs` 产出。禁止手改。 |
 | `scripts/` | Node ESM 开发工具，不在浏览器运行。 |
 | `tests/` | `node:test` 用例，直接 import `../dist/core.js`。 |
 
@@ -115,9 +116,10 @@ graph LR
 | 目的 | 命令 |
 | --- | --- |
 | 安装依赖（跑测试前必须） | `npm ci` |
-| 跑测试（13 项） | `npm test` |
+| 跑测试（17 项） | `npm test` |
 | 静态校验：模块依赖、DOM id、必需文件 | `node scripts/check-static.mjs` |
 | 重新生成 `dist/vendor/three/` | `npm run vendor` |
+| 重新生成 `dist/vendor/ocr/` | `npm run vendor:ocr` |
 | 重新生成示例 GLB | `node scripts/demo-assets.mjs` |
 | 本地起服务 | `py start.py`（Windows）/ `python3 start.py` |
 | Windows 一键启动 | 双击 `启动_Windows.bat` |
@@ -136,7 +138,7 @@ graph LR
 - 命名：函数/变量 camelCase；高频缩写 `r` = record、`t` = table record、`n` = number。
 - DOM 取用统一走 `const $=id=>document.getElementById(id)`。
 - CSS 类名 kebab-case；状态类固定为 `active` / `invalid` / `confirmed`；语义色用 `dist/style.css` 的 `:root` 变量 `--ink --muted --line --accent --tint --bg --x --y --z`，坐标轴专用 `--x`(红) `--y`(绿) `--z`(蓝)。
-- 数据驱动 DOM：`data-icon`（图标名）、`data-mode`（工具模式）、`data-distance`、`data-preset-size`；新增图标要同时改 `app.js` 顶部的 `iconPaths` 映射。
+- 数据驱动 DOM：`data-icon`（图标名）、`data-mode`（工具模式）、`data-distance`、`data-seat-distance`、`data-preset-size`；新增图标要同时改 `app.js` 顶部的 `iconPaths` 映射。
 - 单位换算边界：`recordState()` 负责弧度→度（`MathUtils.radToDeg`），内部一律弧度。
 
 **错误处理三档：** `throw new Error('中文提示')` 用于可恢复的输入错误（`core.js` 与 `setTransform` 都用这个，`setTransform` 里混有英文 `'Unknown object id'`）；`toast(msg)` 用于瞬时用户反馈（`mutate()` 与 `importFiles()` 会 catch 并 toast）；`fatal(msg)` 用于启动即失败（WebGL 不可用等）。批量导入逐个文件 try/catch，失败计数并在 `console.warn('GLB import failed', e)` 留痕。
@@ -152,24 +154,26 @@ graph LR
 | `dist/index.html` | 入口。57 行。含 importmap（`three` → `./vendor/three/three.module.js`，`three/addons/` → `./vendor/three/addons/`）与全部 DOM；末尾有 `<script type="module" src="./app.js">`。 |
 | `dist/app.js` | 入口逻辑。189 行。`window.deskverse` 在 **182-185 行**：`getState` / `select(id)` / `setTransform(id, patch)` / `importFiles`。末尾 `await loadRealScene()` 自动载入真实桌子显示器。 |
 | `dist/core.js` | 纯函数层，58 行。改动这里必须同步 `tests/core.test.mjs`。 |
-| `scripts/check-static.mjs` | 轻量静态守卫：解析模块图（含 importmap 别名）、校验 HTML id 唯一且 `app.js` 引用的 id 都存在、断言 `feature.css` 与 `assets/desk-real.glb`、`assets/monitor-real.glb` 等文件在位。 |
+| `scripts/check-static.mjs` | 轻量静态守卫：解析模块图（含 importmap 别名）、校验 HTML id 唯一且 `app.js` 引用的 id 都存在，并断言 GLB、解码器与离线 OCR worker / WASM / 语言模型文件在位。 |
 | `scripts/vendor.mjs` | 从 `node_modules/three` 复制 `three.module.js` / `three.core.js` / `LICENSE`，并递归抓取 addon 的相对 import 及 Draco / Basis 二进制。需要先 `npm ci`。 |
+| `scripts/vendor-ocr.mjs` | 从 `node_modules/tesseract.js` 与 `tesseract.js-core` 复制 OCR worker / WASM 核心，并复制 `scripts/ocr/chi_sim.traineddata`，生成离线浏览器 OCR 资源。 |
 | `README.md` | **对外契约文档**：`window.deskverse` 用法、`getState()` 字段表、吸附规则、资产边界。改公开 API 必须同步这里。 |
 | `start.py` | 仅标准库的本地静态服务器（`ThreadingHTTPServer` + `SimpleHTTPRequestHandler`）。 |
+| `rodin_service.py` | 开发中的本机 Rodin 代理：读取环境变量或 `.env`，保存任务至 `.deskverse/`。禁止提交真实密钥和任务私密订阅信息。照片建模链路尚未完成验收。 |
 
 ## Runtime/Tooling Preferences
 
 - **Node.js**（[INFERENCE] 18+，`package.json` 无 `engines` 字段）：仅开发/测试需要。测试脚本与 `scripts/` 用 **ESM**——`package.json` 有 `"type": "module"`，脚本扩展名为 `.mjs`。
-- **包管理器：npm**。仓库只有 `package-lock.json`（lockfileVersion 3），无 pnpm/yarn 锁文件。依赖用**精确版本** `"three": "0.180.0"`，改版本必须同步 `package-lock.json`（用 `npm version` / `npm install`，别手改）。
+- **包管理器：npm**。仓库只有 `package-lock.json`（lockfileVersion 3），无 pnpm/yarn 锁文件。依赖用**精确版本** `"three": "0.180.0"` 与 `"tesseract.js": "7.0.0"`，改版本必须同步 `package-lock.json`（用 `npm version` / `npm install`，别手改）。
 - **Python 3**：仅 `start.py`，只用标准库，可用 `py` 或 `python3`。
 - **不存在的东西**（已确认全仓无匹配）：TypeScript / `tsconfig.json`、任何 bundler（vite/rollup/webpack）、ESLint / Prettier / Biome / `.editorconfig`、`.github/workflows`、Makefile、git hooks。**不要引入以上工具**，会与「无构建、浏览器直读源码」的架构冲突。
-- `dist/vendor/three/` 与 `dist/assets/demo-*.glb` 是**生成物但必须提交**（`.gitignore` 顶部注释已声明：`dist/` 是已构建产物，必须保留在仓库里）。`node_modules/` 已被忽略。
+- `dist/vendor/three/`、`dist/vendor/ocr/` 与 `dist/assets/demo-*.glb` 是**生成物但必须提交**（`.gitignore` 顶部注释已声明：`dist/` 是已构建产物，必须保留在仓库里）。`node_modules/` 已被忽略。
 
 ## Testing & QA
 
-- 框架：Node 内置 **`node:test` + `node:assert/strict`**，无第三方测试库。单文件 `tests/core.test.mjs`，13 个用例。
+- 框架：Node 内置 **`node:test` + `node:assert/strict`**，无第三方测试框架。单文件 `tests/core.test.mjs`，17 个用例。
 - **跑测试前必须 `npm ci`**：用例 `import * as T from 'three'` 走裸模块名，没有 `node_modules` 会 `ERR_MODULE_NOT_FOUND`。
-- 覆盖率范围：**只覆盖 `core.js`**。用例按 import 进来的 shipped 代码（`../dist/core.js`）测试，分组为：归一化与底部中心 pivot、任意旋转/非等比缩放后贴面、等比与分轴尺寸校准、非法尺寸与空几何拒绝、`recordState` 坐标语义、`locked` 透传、`History` 的 undo/redo 与上限、**真实二进制 GLB 加载**（读取 `dist/assets/demo-lamp|monitor|table.glb`）、损坏 GLB 与外部 `uri` 拒绝。
+- 覆盖率范围：**只覆盖 `core.js`**。用例按 import 进来的 shipped 代码（`../dist/core.js`）测试，分组为：归一化与底部中心 pivot、任意旋转/非等比缩放后贴面、等比与分轴校准、商品规格的精确 XYZ 尺寸、尺寸图 OCR 文本解析、坐高估算、`recordState` 坐标语义、`locked` 透传、`History`、**真实二进制 GLB 加载**（读取 `dist/assets/demo-lamp|monitor|table.glb`）、损坏 GLB 与外部 `uri` 拒绝。
 - 新增用例约定：沿用 `near(actual, expected)`（容差 `1e-5`）做浮点断言；沿用 `record()` 工厂构造 `BoxGeometry(2,4,6)` + `normalizeModel(m, 60)` 得 20×40×60 的基准记录；标题用英文陈述句描述行为。
 - **`app.js` 的 DOM/UI/交互没有任何自动化测试。** 新增 UI 行为靠人工浏览器验收，`check-static.mjs` 只能守模块图与 id 引用。改动 UI 后必须真在浏览器里点一遍。
-- 已知文档不一致，别照抄 README：README 写「12 项 Node 测试」（实际 13）；README 提到的 `base_basic_pbr.glb` / `monitor_demo.glb` 实际文件名为 `desk-real.glb` / `monitor-real.glb`。
+- 已知文档不一致，别照抄 README：README 提到的 `base_basic_pbr.glb` / `monitor_demo.glb` 是导入后的来源名，磁盘资产实际为 `desk-real.glb` / `monitor-real.glb`。
