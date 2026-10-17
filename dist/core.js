@@ -43,6 +43,54 @@ export function setDimension(record, axis, value, uniform=true) {
   if(uniform)record.root.scale.multiplyScalar(value/old);
   else record.root.scale[axis]=value/record.baseSize[axis];
 }
+export function setDimensions(record, dimensions) {
+  if(!Array.isArray(dimensions)||dimensions.length!==3||dimensions.some(value=>!Number.isFinite(value)||value<=0||value>100000)) throw new Error('宽、高、深都必须是大于 0 且不超过 100000 cm 的数字。');
+  for(const axis of AXES)if(record.baseSize[axis]<1e-8)throw new Error('该方向是零厚度平面，不能直接校准厚度。');
+  for(const [index,axis] of AXES.entries())record.root.scale[axis]=dimensions[index]/record.baseSize[axis];
+}
+export function parseSizeChart(text) {
+  if(typeof text!=='string'||!text.trim())return [];
+  const normalized=text.replace(/[０-９]/g,char=>String.fromCharCode(char.charCodeAt(0)-0xfee0)).replace(/[．。]/g,'.').replace(/[＊✕✖×xX*]/g,'×');
+  const lines=normalized.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  const packaging=/彩盒|外箱|包装|箱规|外包装|carton|package/i;
+  const preferred=lines.flatMap((line,index)=>{
+    if(packaging.test(line)||!/(产品|商品|本体|机身)?尺寸|规格|dimension|size/i.test(line))return [];
+    const next=lines[index+1];return /\d/.test(line)?[line]:next&&!packaging.test(next)?[line,next]:[line];
+  });
+  const candidates=[];
+  const pattern=/(\d{1,4}(?:\.\d+)?)\s*(?:毫米|mm|厘米|cm)?\s*×\s*(\d{1,4}(?:\.\d+)?)\s*(?:毫米|mm|厘米|cm)?(?:\s*×\s*(\d{1,4}(?:\.\d+)?)\s*(?:毫米|mm|厘米|cm)?)?(?:\s*(毫米|mm|厘米|cm))?/gi;
+  const scan=sourceLines=>{
+    for(const line of sourceLines){
+      if(packaging.test(line))continue;
+      const labels=[...line.matchAll(/[（(]\s*(长|宽|高)\s*[）)]/g)].map(match=>match[1]);
+      const numericLine=line.replace(/[（(]\s*(?:长|宽|高)\s*[）)]/g,' ');
+      for(const match of numericLine.matchAll(pattern)){
+        const numbers=[match[1],match[2],match[3]].filter(Boolean).map(Number);
+        const millimeters=/毫米|mm/i.test(match[0])||(!/厘米|cm/i.test(line)&&/毫米|mm/i.test(line));
+        const scale=millimeters ? .1 : 1;
+        let dimensions;
+        if(numbers.length===2)dimensions=[numbers[0],numbers[1],numbers[0]];
+        else if(labels.length>=3&&['长','宽','高'].every(label=>labels.includes(label))){const values=Object.fromEntries(labels.slice(0,3).map((label,index)=>[label,numbers[index]]));dimensions=[values.宽,values.高,values.长];}
+        else dimensions=[numbers[1],numbers[2],numbers[0]];
+        dimensions=dimensions.map(value=>Number((value*scale).toFixed(3)));
+        if(dimensions.every(value=>Number.isFinite(value)&&value>0&&value<=100000)&&!candidates.some(item=>item.dimensions.every((value,index)=>Math.abs(value-dimensions[index])<.01)))candidates.push({dimensions});
+      }
+    }
+  };
+  scan(preferred);
+  if(!candidates.length)scan(lines);
+  const capacities=[...new Set([...normalized.matchAll(/(\d+(?:\.\d+)?)\s*(ml|毫升)/gi)].map(match=>`${match[1]} ${match[2].toLowerCase()==='ml'?'ml':'毫升'}`))];
+  return candidates.slice(0,12).map((candidate,index)=>({...candidate,name:capacities.length===candidates.length?capacities[index]:`规格 ${index+1}`}));
+}
+export function estimateSeatHeight(statureCm, ratio=.25) {
+  if(!Number.isFinite(statureCm)||!Number.isFinite(ratio)) throw new Error('身高和坐高比例必须是有效数字。');
+  // 按人体比例初步估算，并允许用户小幅调整。
+  const stature=THREE.MathUtils.clamp(statureCm,120,220);
+  const minCm=Math.max(30,stature*.23+2);
+  const maxCm=Math.min(70,stature*.27+2);
+  const cm=THREE.MathUtils.clamp(stature*THREE.MathUtils.clamp(ratio,.23,.27)+2,minCm,maxCm);
+  return {statureCm:stature,cm,minCm,maxCm,ratio:(cm-2)/stature};
+}
 export function recordState(record) {
   const bounds=boundsOf(record.root);
   return {id:record.id,name:record.name,sourceFile:record.sourceFile,role:record.role,demo:record.demo,locked:!!record.locked,calibrated:record.calibrated,grounded:record.grounded,surfaceY:record.surfaceY??null,

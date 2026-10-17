@@ -7,6 +7,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.env
+.env.*
+!.env.example
+.deskverse/
 
 # 编辑器与系统
 .DS_Store
