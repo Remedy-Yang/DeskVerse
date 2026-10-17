@@ -19,9 +19,12 @@ try{
  const setOpening=async(id,value)=>{await page.selectOption('#drawer-select',id);await page.locator('#drawer-'+(value?'open':'close')).click();await page.waitForTimeout(500);};
  const initial=await state(),table=initial.objects.find(item=>item.role==='table'),chair=initial.objects.find(item=>item.name==='椅子');
  assert.equal(initial.objects.length,3);assert.ok(chair);assert.equal(initial.surface.heightCm,0);assert.equal(initial.collision.enabled,true);
- assert.ok(Math.abs(table.dimensionsCm[1]-180)<.001);assert.ok(Math.abs(table.dimensionsCm[2]-85)<.001);assert.equal(chair.surfaceY,-76);
+ assert.ok(Math.abs(table.dimensionsCm[1]-210)<.001);assert.equal(chair.surfaceY,-76);
+ const rightDrawer=initial.drawers.find(drawer=>drawer.id==='right-drawer-1'),inside=rightDrawer.interiorCm,blockingPosition=[(inside.min[0]+inside.max[0])/2,chair.position[1],(inside.min[2]+inside.max[2])/2];
+ await page.evaluate(({id,position})=>window.deskverse.setTransform(id,{position}),{id:chair.id,position:blockingPosition});
  await setOpening('right-drawer-1',1);assert.ok((await state()).collision.detected);assert.equal((await state()).collision.blocked,false);assert.equal(await opening('right-drawer-1'),1);
  await page.screenshot({path:resolve(output,'collision-chair-blocks-drawer.png'),fullPage:true});
+ await page.evaluate(({id,position})=>window.deskverse.setTransform(id,{position}),{id:chair.id,position:chair.position});
  await setOpening('right-drawer-1',0);await page.locator('#chair-pull').click();
  const moved=(await state()).objects.find(o=>o.id===chair.id);assert.ok(Math.abs(moved.position[2]-chair.position[2]-35)<.001);assert.deepEqual(moved.dimensionsCm,chair.dimensionsCm);
  await page.locator('#undo').click();assert.deepEqual((await state()).objects.find(o=>o.id===chair.id).position,chair.position);await page.locator('#redo').click();
@@ -52,8 +55,8 @@ try{
  assert.ok(Math.abs(closed.position[0]-stored.position[0]-travel)<.001);assert.deepEqual(closed.dimensionsCm,stored.dimensionsCm);
  await page.locator('#undo').click();assert.equal(await opening('right-drawer-1'),1);assert.deepEqual((await state()).objects.at(-1).position,stored.position);
  await page.locator('#redo').click();await setOpening('right-drawer-1',1);await page.locator('#drawer-focus').click();await page.screenshot({path:resolve(output,'right-drawer-storage.png'),fullPage:true});
- const result=await page.evaluate(id=>window.deskverse.setTransform(id,{position:[8.740997314453125,-76,-150]}),chair.id);
- assert.equal(result.accepted,true);assert.equal(result.collision.blocked,false);assert.ok(result.collision.detected);assert.equal((await state()).objects.find(o=>o.id===chair.id).position[2],-150);await page.locator('#undo').click();
+ const result=await page.evaluate(({id,position})=>window.deskverse.setTransform(id,{position}),{id:chair.id,position:blockingPosition});
+ assert.equal(result.accepted,true);assert.equal(result.collision.blocked,false);assert.ok(result.collision.detected);assert.deepEqual((await state()).objects.find(o=>o.id===chair.id).position,blockingPosition);await page.locator('#undo').click();
  await page.locator('#view-home').click();await page.locator('[data-distance="460"]').click();await page.waitForTimeout(1800);
  await page.screenshot({path:resolve(output,'furniture-desktop.png'),fullPage:true});
  const canvas=page.locator('#viewport canvas'),frames=[];

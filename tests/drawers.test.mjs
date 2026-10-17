@@ -13,12 +13,13 @@ async function desk(){
  // 只验收几何，不在 Node 中解码材质；源文件和浏览器纹理均不修改。
  const loader=new GLTFLoader();loader.register(parser=>({name:'test-material',loadMaterial:()=>Promise.resolve(new T.MeshBasicMaterial())}));
  const {scene}=await loader.parseAsync(buffer.buffer.slice(buffer.byteOffset,buffer.byteOffset+buffer.byteLength),'');
- const r=normalizeModel(prepareDeskModel(scene),180);setDimension(r,'y',180,true);setDimension(r,'z',85,false);r.root.position.y=-76;r.root.updateMatrixWorld(true);return r;
+ const r=normalizeModel(prepareDeskModel(scene),210);setDimension(r,'y',210,true);r.root.position.y=-76;r.root.updateMatrixWorld(true);return r;
 }
-test('Updated desk keeps total height, desktop dimensions and work surface calibration',async()=>{
- const r=await desk(),box=boundsOf(r.root);near(getDimensions(r).y,180);near(getDimensions(r).z,85);near(box.min.y,-76);near(box.max.y,104);
- let desktop;r.root.traverse(node=>{if(node.name.startsWith('Desk_top_with_rounded_return'))desktop=node;});assert.ok(desktop);
- const top=boundsOf(desktop),size=top.getSize(new T.Vector3());near(top.max.y,0);near(size.x,137);near(size.z,55);
+test('Realwood bed retains its 200 by 90 footprint and 210 height with the worktop at 76 cm',async()=>{
+ const r=await desk(),box=boundsOf(r.root);near(getDimensions(r).y,210);near(box.min.y,-76);near(box.max.y,134);
+ const bed=boundsOf(r.root.getObjectByName('Upper_bed_edge-aligned_guard_rails_with_entry_post')),bedSize=bed.getSize(new T.Vector3());near(bedSize.x,200);near(bedSize.z,90);
+ const top=boundsOf(r.root.getObjectByName('Desk_top_with_rounded_return__asset'));near(top.max.y,0);
+ const fixed=top.clone().union(boundsOf(r.root.getObjectByName('Cupboard_outer_side__asset'))).union(boundsOf(r.root.getObjectByName('Right_desk_pedestal_outer_side__asset'))),fixedSize=fixed.getSize(new T.Vector3());near(fixedSize.x,200);near(fixedSize.z,90);
 });
 test('Drawer groups five real panels, leaves runners fixed, and translates without scaling',async()=>{
  const r=await desk(),drawer=createDrawerSystem(r.root);assert.ok(drawer);assert.equal(drawer.parts.length,5);
@@ -61,5 +62,6 @@ test('Cupboard door spans the opening when closed',async()=>{
  const r=await desk(),drawers=createDrawerSystems(r.root),door=createDoorSystem(r.root);door.setOpening(0);
  const closed=boundsOf(door.group),outer=boundsOf(r.root.getObjectByName('Cupboard_outer_side__asset')),partition=boundsOf(r.root.getObjectByName('Cupboard_and_desk_partition__asset'));
  assert.ok(closed.min.x<=outer.max.x+.5);assert.ok(closed.max.x>=partition.min.x-.5);
+ assert.ok(closed.min.x>=outer.max.x-.01);assert.ok(closed.max.x<=partition.min.x+.01);
  assert.equal(drawers.length,4);
 });

@@ -181,7 +181,7 @@ test('Real desk GLB exposes the curved named desktop outline',async()=>{
  const bytes=await readFile(new URL('../dist/assets/desk-real.glb',import.meta.url)),loader=new GLTFLoader();
  loader.register(()=>({name:'placement-material',loadMaterial:()=>Promise.resolve(new T.MeshBasicMaterial())}));
  const gltf=await loader.parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
- const geometry=normalizeModel(prepareDeskModel(gltf.scene),180),table={id:'real-desk',name:'真实桌',role:'table',calibrated:true,root:geometry.root,baseSize:geometry.baseSize};
+ const geometry=normalizeModel(prepareDeskModel(gltf.scene),210),table={id:'real-desk',name:'真实桌',role:'table',calibrated:true,root:geometry.root,baseSize:geometry.baseSize};
  const surface=report([],null,{table}).surface;
  assert.equal(surface.shapeSource,'named-top-mesh');assert.ok(surface.rings.length>=1);assert.ok(surface.polygon.length>4);assert.ok(area(surface.polygon)>0);assert.ok(surface.max[1]>surface.min[1]);
 });

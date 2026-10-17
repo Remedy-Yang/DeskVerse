@@ -9,19 +9,18 @@ function fitPanelAxis(mesh,axis,min,max){
  geometry.applyMatrix4(mesh.matrixWorld.clone().invert());geometry.computeBoundingBox();geometry.computeBoundingSphere();geometry.computeVertexNormals();mesh.geometry=geometry;
 }
 
-// 新模型增加床架、椅子和独立部件；通过桌板锚点维持原尺寸表，不把桌板高度误作整柜高度。
+// 床框宽深沿用资产的 200 × 90 cm；总高校准为 210 cm，桌板仍保持离地 76 cm。
 export function prepareDeskModel(model){
  const desktop=named(model,'Desk_top_with_rounded_return');
  if(!desktop)return model;
  model.updateMatrixWorld(true);const whole=boxOf(model),desk=boxOf(desktop),floor=whole.min.y;
  const group=new THREE.Group();group.name='calibrated-desk';
- const mapY=value=>value<=desk.max.y?mapRange(value,floor,desk.max.y,0,76):mapRange(value,desk.max.y,whole.max.y,76,180);
- const mapZ=value=>value<=desk.max.z?mapRange(value,desk.min.z,desk.max.z,-27.5,27.5):mapRange(value,desk.max.z,whole.max.z,27.5,85+(whole.min.z-desk.min.z)*55/(desk.max.z-desk.min.z)-27.5);
+ const mapY=value=>value<=desk.max.y?mapRange(value,floor,desk.max.y,0,76):mapRange(value,desk.max.y,whole.max.y,76,210);
  model.traverse(node=>{
   if(!node.isMesh)return;
   const mesh=new THREE.Mesh(node.geometry.clone().applyMatrix4(node.matrixWorld),node.material);mesh.name=node.name;mesh.userData.noCollision=/^(Hinge_|Drawer_runner)/.test(mesh.name);
   const position=mesh.geometry.attributes.position;
-  for(let index=0;index<position.count;index++)position.setXYZ(index,mapRange(position.getX(index),desk.min.x,desk.max.x,-68.5,68.5),mapY(position.getY(index)),mapZ(position.getZ(index)));
+  for(let index=0;index<position.count;index++)position.setXYZ(index,position.getX(index)*100,mapY(position.getY(index)),position.getZ(index)*100);
   position.needsUpdate=true;mesh.geometry.deleteAttribute('tangent');mesh.geometry.computeVertexNormals();mesh.geometry.computeBoundingBox();mesh.geometry.computeBoundingSphere();group.add(mesh);
  });
  return group;
@@ -93,7 +92,8 @@ export function createDrawerSystems(tableRoot){
 
 export function createDoorSystem(tableRoot){
  const part=named(tableRoot,'Open_cupboard_door');if(!part)return null;
- const box=boxOf(part),pivot=new THREE.Vector3(box.max.x,box.min.y,box.min.z),group=new THREE.Group();group.name='cupboard-door-hinge';group.position.copy(pivot);tableRoot.attach(group);group.attach(part);part.userData.doorId='cupboard-door';
+ const outer=named(tableRoot,'Cupboard_outer_side'),partition=named(tableRoot,'Cupboard_and_desk_partition');
+ const box=boxOf(part),pivot=new THREE.Vector3(outer?boxOf(outer).getCenter(new THREE.Vector3()).x:box.max.x,box.min.y,box.min.z),group=new THREE.Group();group.name='cupboard-door-hinge';group.position.copy(pivot);tableRoot.attach(group);group.attach(part);part.userData.doorId='cupboard-door';
  const rotation=group.rotation.y,span=box.getSize(new THREE.Vector3()),approxAngle=Math.atan2(span.z,-span.x),maxAngle=THREE.MathUtils.degToRad(130);
  // Bake the authored diagonal door into a hinge-aligned local frame. Its OBB
  // must be the actual thin panel, not the large empty rectangle around it.
@@ -106,16 +106,13 @@ export function createDoorSystem(tableRoot){
  }
  let opening=angle/maxAngle;
  worldGeometry.translate(-pivot.x,-pivot.y,-pivot.z).applyMatrix4(new THREE.Matrix4().makeRotationY(angle));
- // The source door is narrower than the cabinet opening. Extend only its
- // local horizontal span so the closed panel reaches the partition without
- // changing the calibrated desk height or the hinge position.
- const outer= named(tableRoot,'Cupboard_outer_side'),partition=named(tableRoot,'Cupboard_and_desk_partition');
- const targetWidth=outer&&partition?Math.abs(boxOf(partition).min.x-boxOf(outer).max.x)+1:54;
+ // 门板按柜体实际开口缩放，避免新版资产的宽门板关闭后穿过隔板。
+ const startX=outer?boxOf(outer).max.x+.2-pivot.x:0,targetWidth=partition?boxOf(partition).min.x-.2-pivot.x-startX:54;
  worldGeometry.computeBoundingBox();
  const currentWidth=worldGeometry.boundingBox.max.x-worldGeometry.boundingBox.min.x;
- if(currentWidth>1&&targetWidth>currentWidth){
+ if(currentWidth>1){
   const positions=worldGeometry.attributes.position,minX=worldGeometry.boundingBox.min.x;
-  for(let i=0;i<positions.count;i++)positions.setX(i,minX+(positions.getX(i)-minX)*targetWidth/currentWidth);
+  for(let i=0;i<positions.count;i++)positions.setX(i,startX+(positions.getX(i)-minX)*targetWidth/currentWidth);
   positions.needsUpdate=true;
  }
  const beam=named(tableRoot,'Loft_front_beam'),roof=beam?boxOf(beam).min.y-.3:box.max.y;

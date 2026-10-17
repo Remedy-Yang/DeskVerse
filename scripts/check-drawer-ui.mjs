@@ -16,7 +16,7 @@ try{
  await page.locator('[data-panel-tab="furniture"]').click();
  const state=()=>page.evaluate(()=>window.deskverse.getState());
  const initial=await state();const table=initial.objects.find(item=>item.role==='table');
- assert.ok(Math.abs(table.dimensionsCm[1]-180)<.001);assert.ok(Math.abs(table.dimensionsCm[2]-85)<.001);assert.equal(initial.surface.heightCm,0);
+ assert.ok(Math.abs(table.dimensionsCm[1]-210)<.001);assert.equal(initial.surface.heightCm,0);
  await page.locator('#view-home').click();await page.screenshot({path:resolve(output,'desk-new-textures-closed.png'),fullPage:true});
  await page.locator('#drawer-open').click();await page.waitForFunction(()=>window.deskverse.getState().drawers[0].opening===1);
  await page.locator('#drawer-focus').click();
@@ -53,5 +53,5 @@ try{
  assert.equal((await state()).objects.length,0);assert.equal((await state()).drawers.length,0);assert.ok(await page.locator('#drawer-controls').isHidden());
  await page.locator('#redo').click();assert.equal((await state()).drawers.length,4);assert.ok(await page.locator('#drawer-controls').isVisible());
  assert.deepEqual(errors,[]);await context.close();
- console.log('Drawer UI passed: unchanged desk calibration, storage following without scaling, undo/redo, take out, oversized warnings and unrestricted movement, nonblank canvas and mobile layout. Evidence:',output);
+ console.log('Drawer UI passed: realwood bed calibration, storage following without scaling, undo/redo, take out, oversized warnings and unrestricted movement, nonblank canvas and mobile layout. Evidence:',output);
 }finally{await browser.close();}
