@@ -12,6 +12,57 @@ DeskVerse Studio：纯浏览器端三维桌面摆放工作台。无后端、无 
 - 离线可用：Three.js r180 与 Draco / Meshopt / KTX2 解码器已 vendored 进 `dist/vendor/three/`。
 - 对外契约是 `window.deskverse`（供队友「4 号」做越界/重叠判断接入），见 `README.md` 的「给 4 号同学的接口」。
 
+## Git Collaboration Workflow
+
+本节适用于所有成员及代为修改仓库的自动化助手。`main` 是稳定交付分支；所有功能、修复、文档与配置变更都通过独立分支和 Pull Request（PR）合入，**禁止直接在 `main` 上开发、提交或推送**。
+
+### 任务与分支
+
+- 开工前在 Issue 或团队任务记录中明确负责人、改动范围与验收标准；同一任务由一人负责集成。涉及 `window.deskverse`、导出数据结构或多人同时修改的文件时，先与相关成员确认接口和文件分工。
+- **每人每个新功能创建一个新分支**；修复和文档任务也使用独立分支。一个分支只处理一个任务，不混入无关重构，不复用已合并分支。
+- 分支命名：`<type>/<owner>-<short-description>`，使用小写英文与连字符；`type` 使用 `feat`、`fix`、`docs`、`refactor`、`test` 或 `chore`，例如 `feat/alice-object-snapping`、`docs/bob-collaboration-rules`。有关联 Issue 时可加入编号。
+- 从最新的 `origin/main` 创建分支，而不是从过期的本地分支或队友未合并的功能分支创建。以下示例假定远端名为 `origin`；实际不同则替换，分支名也须替换为自己的任务名称。
+
+```bash
+# 确认工作区和暂存区干净；有改动时先按下节保护现场
+git status
+git fetch origin --prune
+git switch -c feat/alice-object-snapping origin/main
+```
+
+### 提交前同步与冲突处理
+
+- **开始开发、每次提交前、每次推送前以及请求合并前，都必须先拉取并同步远端最新改动**。先用 `git status` 确认当前分支和本地改动，再执行 `git fetch origin --prune`；仅 fetch 不代表已经把远端变更合入当前分支。
+- 同步前必须保护未提交内容：有本任务改动时，可用 `git stash push -u -m 'before-sync: task description'` 暂存，记录对应条目；完成同步后用 `git stash apply <stash-ref>` 恢复，确认完整后再删除该条目。`-u` 不包含被忽略文件。发现其他成员或用户留下的改动时，先确认归属，不擅自暂存、提交、覆盖或清除。
+- 当前任务分支已有同名远端分支及正确的 upstream 时，先执行 `git pull --ff-only` 同步该分支；若尚未设置 upstream，则明确合并已 fetch 的 `origin/<当前分支名>`。全新的分支没有远端对应分支时跳过这一步。
+- 若 `pull --ff-only` 因双方都有新提交而失败，先检查双方提交并与分支参与者确认，再用 `git merge origin/<当前分支名>` 保留双方历史；不得用强推或硬重置绕过分歧。
+- 随后在**当前任务分支**执行 `git merge origin/main`，吸收主分支最新改动。默认使用 merge 同步，避免改写已发布历史；多人共享或已推送的提交不得擅自 rebase、amend 或强推。
+- 恢复暂存内容后重新检查差异。发生 merge 或 stash 恢复冲突时，逐段理解双方意图，与相关作者确认后解决；禁止不加判断地整文件选择 ours/theirs。移除冲突标记并验证受影响功能后，才可继续提交和推送。
+- 网络、权限或冲突导致同步失败时，停止常规提交、推送及合并流程并报告具体阻塞；不能把“尝试拉取”当作“已完成同步”。
+
+### 提交内容与提交信息
+
+- 每次提交只表达一个完整、可说明的改动；按明确文件路径执行 `git add <path>`，提交前检查 `git diff --staged`。不得把队友改动、无关格式化或本机文件顺带提交。
+- 提交标题使用英文，格式为 `type: concise summary`，需要范围时使用 `type(scope): concise summary`；类型与分支类型一致按变更性质选择，标题明确说明“改了什么”，不能只写 `update`、`fix bug` 或 `修改代码`。
+- 示例：`feat: add object snapping to desk surface`、`fix(core): preserve horizontal position when placing models`、`docs: define Git collaboration workflow`。
+- 非简单变更须在正文说明原因、关键行为变化、兼容性影响与验证结果；有关联 Issue 时引用编号。破坏性接口变更必须明确标注，并先与调用方协调迁移。
+- 禁止提交密钥、令牌、个人配置、`node_modules/`、日志和临时文件。`dist/` 是源码和交付物，不能整体忽略；vendor 与示例资产只在相关任务中通过规定脚本更新。不要顺带重新生成或覆盖用户提供的真实 GLB。
+
+### 推送、PR 与合并
+
+- 提交只推送到自己的任务分支。首次推送使用 `git push -u origin <当前分支名>`；后续推送仍须核对目标分支，不得将目标设为 `main`。禁止 `git push --force`、`git push --mirror` 等可能覆盖他人历史的操作；`--force-with-lease` 也不是绕过审查的许可。
+- 推送后创建以 `main` 为目标的 PR，写清任务或 Issue、变更摘要、影响范围、验证命令与实际结果；UI 变更附截图或操作记录，接口变更说明调用方迁移情况。未完成或尚未验证的工作使用 Draft PR。
+- 请求审查前完成适用验证：代码改动按本文件要求先 `npm ci`，再运行 `npm test` 与 `node scripts/check-static.mjs`；UI 改动还必须通过 HTTP 服务在真实浏览器中操作验收。纯文档改动检查内容、命令与 Markdown，不要求安装依赖或运行无关测试。未执行的验证必须明确标注，不能声称通过。
+- 至少一名非作者成员审查通过，所有阻塞意见解决、与最新 `main` 无冲突且适用检查通过后，由维护者合并。审查后新增实质性改动必须重新请求审查；同步或解决冲突后重新执行受影响的验证。
+- 默认使用 Squash and merge，将一个任务整理为一个清晰提交；合并标题与正文遵守上述提交信息规范。需保留独立提交历史时，由维护者在 PR 中说明理由。
+- 合并后关闭关联任务，确认无未合并工作再删除任务分支；下一个任务重新从最新 `origin/main` 建分支。已合入 `main` 的问题通过新的修复或 revert PR 处理，不重写主分支历史。
+
+### 仓库保护与自动化边界
+
+- 仓库管理员应为 `main` 配置分支保护或 ruleset：要求 PR、至少一名非作者批准、新提交使旧批准失效、解决所有审查讨论，并禁止强推和删除；已有 CI 时，将实际运行的检查设为必需检查。本文是协作约定，**不代表远端保护或 CI 已配置**。
+- 自动化助手同样遵守分支、同步、审查和验证规则；修改文件不等于获准推送远端、合并 PR 或更改仓库保护设置，这些远端写操作须有用户明确授权。
+- 不使用 `git reset --hard`、`git clean -fd`、强制切换分支等命令来“清理”不明改动。确需破坏性操作时，先说明影响范围、备份与恢复方式，并取得相关成员或用户确认。
+
 ## Architecture & Data Flow
 
 两层，单向依赖：`index.html → app.js → core.js`。
