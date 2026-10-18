@@ -26,6 +26,13 @@ export function prepareDeskModel(model){
  return group;
 }
 
+// 只读取上铺排骨床板，避免把护栏顶或下层桌面当成床垫支撑面。
+export function upperBedSurface(tableRoot){
+ const box=new THREE.Box3();tableRoot?.updateWorldMatrix(true,true);
+ tableRoot?.traverse(node=>{if(node.isMesh&&node.name.startsWith('Loft_bed_slat_'))box.union(new THREE.Box3().setFromObject(node,true));});
+ return box.isEmpty()?null:box;
+}
+
 export function createDrawerSystem(tableRoot){
  const floor=named(tableRoot,'Drawer_bottom'),front=named(tableRoot,'Drawer_front'),rear=named(tableRoot,'Drawer_rear');
  const sides=[],runners=[];tableRoot.traverse(node=>{if(!node.isMesh)return;if(node.name.startsWith('Drawer_side'))sides.push(node);if(node.name.startsWith('Drawer_runner'))runners.push(node);});

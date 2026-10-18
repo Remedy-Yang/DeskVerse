@@ -8,7 +8,7 @@ import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {AXES,MAX_FILE_SIZE,inspectGLB,normalizeModel,boundsOf,placeOnSurface,getDimensions,setDimension,setDimensions,parseSizeChart,estimateSeatHeight,recordState,sceneModelBytes} from './core.js';
 import {initPhotoGeneration} from './generation.js';
-import {prepareDeskModel,createDrawerSystems,createDoorSystem,extractChair,findStoragePosition} from './drawers.js';
+import {prepareDeskModel,createDrawerSystems,createDoorSystem,extractChair,findStoragePosition,upperBedSurface} from './drawers.js';
 import {colliders,capturePose,applyPose,assessTransform,sceneContact} from './collision.js';
 import {REFERENCE_PROFILES,profileFor,inferCategory,referenceLabel,prepareReferenceModel,setModelOrientation,orientRecord,rotateRecord,applyReferenceSize,savePhotoCategory} from './reference.js';
 import {placementReport} from './placement.js';
@@ -395,7 +395,7 @@ async function prepareBuffer(buffer,sourceFile,role='item',options={}){
  if(options.photoGenerated)applyReferenceSize(r,category);
  if(options.dimensions){for(const [index,axis] of AXES.entries())setDimension(r,axis,options.dimensions[index],false);r.calibrated=options.calibrated!==false;}else if(options.calibrateHeightCm){setDimension(r,'y',options.calibrateHeightCm,true);if(options.depthCm)setDimension(r,'z',options.depthCm,false);r.calibrated=options.calibrated!==false;}
  r.surfaceHeightCm=Number.isFinite(options.surfaceHeightCm)?options.surfaceHeightCm:null;r.surfaceFootprintCm=options.surfaceFootprintCm||null;r.initialDimensionsCm=getDimensions(r).toArray();
- if(role==='table')root.position.y=-(r.surfaceHeightCm??getDimensions(r).y);else{root.position.x=options.x??(activeIds.filter(id=>records.get(id).role==='item').length%4-1.5)*18;root.position.z=options.z??0;placeOnSurface(root,topY());}
+ if(role==='table')root.position.y=-(r.surfaceHeightCm??getDimensions(r).y);else{root.position.x=options.x??(activeIds.filter(id=>records.get(id).role==='item').length%4-1.5)*18;root.position.z=options.z??0;r.surfaceY=options.y??topY();placeOnSurface(root,r.surfaceY);}
  if(options.yaw)root.rotation.y=THREE.MathUtils.degToRad(options.yaw);
  const children=[];
  if(role==='table'){
@@ -426,8 +426,10 @@ async function addLibraryAsset(asset){
  if(busy||planDrag||activeDrag||seatPan||transform.dragging||asset.fixed)return;
  setBusy(true,'正在放入 '+asset.name+'…');
  try{
+  const options={...asset.options,name:asset.name};
+  if(asset.placement==='upper-bed'){const bed=upperBedSurface(table()?.root);if(!bed)throw new Error('当前桌柜没有可识别的上铺床板，请先恢复默认桌柜。');const center=bed.getCenter(new THREE.Vector3());Object.assign(options,{x:center.x,y:bed.max.y,z:center.z});}
   const response=await fetch(asset.path);if(!response.ok)throw new Error('模型读取失败，请确认使用项目启动器且 models 目录完整。');
-  const r=await addBuffer(await response.arrayBuffer(),asset.path,'item',{...asset.options,name:asset.name});
+  const r=await addBuffer(await response.arrayBuffer(),asset.path,'item',options);
   checkpoint();focus(r.root);toast('已添加 '+asset.name+'，可继续点击添加另一份。尺寸需核对。');
  }finally{setBusy(false);}
 }
@@ -491,10 +493,10 @@ async function importLayout(files){
    if(!prepared){
     let buffer,options=descriptor.options||{},asset=descriptor.builtin?LAYOUT_ASSETS[descriptor.builtin]:null;
     // 只转交现有导入器使用的字段，禁止 JSON 注入资源 URL 或其他运行时对象。
-    options=Object.fromEntries(['name','categoryId','photoGenerated','photoJobId','demo','locked','icon','targetSize','dimensions','rotationDeg','calibrated','calibrateHeightCm','depthCm','surfaceHeightCm','surfaceFootprintCm','x','z','yaw','lightEffect'].filter(key=>Object.hasOwn(options,key)).map(key=>[key,options[key]]));
+    options=Object.fromEntries(['name','categoryId','photoGenerated','photoJobId','demo','locked','icon','targetSize','dimensions','rotationDeg','calibrated','calibrateHeightCm','depthCm','surfaceHeightCm','surfaceFootprintCm','x','y','z','yaw','lightEffect'].filter(key=>Object.hasOwn(options,key)).map(key=>[key,options[key]]));
     if(options.lightEffect!==undefined&&!['floor-lamp','light-strip'].includes(options.lightEffect))throw new Error('未知灯具光效。');
     for(const key of ['targetSize','calibrateHeightCm','depthCm'])if(options[key]!==undefined&&(!Number.isFinite(options[key])||options[key]<=0||options[key]>100000))throw new Error('模型初始尺寸无效。');
-    for(const key of ['surfaceHeightCm','x','z','yaw'])if(options[key]!=null&&(!Number.isFinite(options[key])||Math.abs(options[key])>100000))throw new Error('模型初始位置无效。');
+    for(const key of ['surfaceHeightCm','x','y','z','yaw'])if(options[key]!=null&&(!Number.isFinite(options[key])||Math.abs(options[key])>100000))throw new Error('模型初始位置无效。');
     for(const key of ['dimensions','surfaceFootprintCm'])if(options[key]!=null&&(!Array.isArray(options[key])||options[key].length!==(key==='dimensions'?3:2)||options[key].some(n=>!Number.isFinite(n)||n<=0||n>100000)))throw new Error('模型尺寸数据无效。');
     if(options.rotationDeg!=null&&(!Array.isArray(options.rotationDeg)||options.rotationDeg.length!==3||options.rotationDeg.some(n=>!Number.isFinite(n)||Math.abs(n)>360000)))throw new Error('模型初始朝向无效。');
     if(asset){
