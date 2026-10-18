@@ -17,8 +17,8 @@ export const MODEL_ASSETS=[
  model('ornament-pbr','小摆件','生活摆件','04-生活摆件/小摆件',18),
  model('figurine-pbr','手办','生活摆件','04-生活摆件/手办',20),
  model('iced-tea','冰红茶','生活摆件','02-数码外设/鼠标/压缩包版本',12),
- {id:'floor-lamp',name:'立灯',category:'照明',path:'/models/03-照明/立灯/立灯.glb',options:{name:'立灯',targetSize:40,categoryId:'lamp'}},
- {id:'light-strip',name:'灯带',category:'照明',path:'/models/03-照明/灯带/灯带.glb',options:{name:'灯带',targetSize:50,categoryId:'generic'}},
+ {id:'floor-lamp',name:'立灯',category:'照明',path:'/models/03-照明/立灯/立灯.glb',options:{name:'立灯',targetSize:40,categoryId:'lamp',lightEffect:'floor-lamp'}},
+ {id:'light-strip',name:'灯带',category:'照明',path:'/models/03-照明/灯带/灯带.glb',options:{name:'灯带',targetSize:50,categoryId:'generic',lightEffect:'light-strip'}},
  {id:'desk-fixed',name:'固定桌柜',category:'家具',path:'/models/01-家具/桌柜/固定资产-桌柜.glb',fixed:true,options:{name:'固定桌柜'}}
 ].map(asset=>({
  ...asset,
