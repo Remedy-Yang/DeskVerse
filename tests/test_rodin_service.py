@@ -15,8 +15,9 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from rodin_service import (RodinService, ServiceError, decode_image, download_glb,
-                           load_api_key, multipart_image, provider_json, valid_id)
+from rodin_service import (MAX_IMAGE_BYTES, RodinService, ServiceError, decode_image,
+                           decode_images, download_glb, load_api_key, provider_json,
+                           valid_id)
 from start import DeskVerseServer, Handler
 
 PNG = b'\x89PNG\r\n\x1a\n' + b'local-test-image'
@@ -29,8 +30,11 @@ class ServiceTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.service = RodinService(self.temporary.name, 'test-only-key')
 
-    def payload(self):
-        return {'id': str(uuid4()), 'name': '杯子', 'image': base64.b64encode(PNG).decode(), 'confirmed': True}
+    def payload(self, images=None):
+        images = images or [PNG]
+        return {'id': str(uuid4()), 'name': '杯子',
+                'images': [base64.b64encode(image).decode() for image in images],
+                'confirmed': True}
 
     def submitted(self, payload=None):
         payload = payload or self.payload()
@@ -57,10 +61,27 @@ class ServiceTests(unittest.TestCase):
                 load_api_key(self.temporary.name)
 
     def test_image_type_is_verified_not_trusted_from_client(self):
-        self.assertEqual(decode_image(self.payload())[1], 'image/png')
+        self.assertEqual(decode_image(base64.b64encode(PNG).decode())[1], 'image/png')
         for data in ('not base64', base64.b64encode(b'not an image').decode(), ''):
             with self.assertRaises(ServiceError):
-                decode_image({'image': data})
+                decode_image(data)
+
+    def test_image_count_and_size_limits(self):
+        self.assertEqual(len(decode_images({'images': [base64.b64encode(PNG).decode()] * 5})), 5)
+        with self.assertRaises(ServiceError):
+            decode_images({'images': [base64.b64encode(PNG).decode()] * 6})
+        for images in ([], 'not-a-list', [1]):
+            with self.assertRaises(ServiceError):
+                decode_images({'images': images})
+        maximum = b'\x89PNG\r\n\x1a\n' + b'x' * (MAX_IMAGE_BYTES - 8)
+        encoded = base64.b64encode(maximum).decode()
+        self.assertEqual(len(decode_images({'images': [encoded]})[0][0]), MAX_IMAGE_BYTES)
+        with self.assertRaises(ServiceError) as caught:
+            decode_images({'images': [encoded, encoded, base64.b64encode(PNG).decode()]})
+        self.assertEqual(caught.exception.status, 413)
+        with self.assertRaises(ServiceError) as caught:
+            decode_images({'images': [base64.b64encode(maximum + b'x').decode()]})
+        self.assertEqual(caught.exception.status, 413)
 
     def test_invalid_task_ids_and_unconfirmed_upload_are_rejected(self):
         for value in ('../../.env', '', None, '123'):
@@ -72,15 +93,32 @@ class ServiceTests(unittest.TestCase):
             with self.assertRaises(ServiceError):
                 self.service.submit(payload)
             provider.assert_not_called()
+        legacy = {'id': str(uuid4()), 'image': base64.b64encode(PNG).decode(), 'confirmed': True}
+        with patch('rodin_service.provider_json') as provider:
+            with self.assertRaises(ServiceError):
+                self.service.submit(legacy)
+            provider.assert_not_called()
 
-    def test_multipart_has_one_image_and_fixed_glb_parameters(self):
-        body, content_type = multipart_image(PNG, 'image/png', 'photo.png')
+    def test_multi_image_submission_sends_repeated_images_and_concat(self):
+        images = [PNG, PNG + b'-second']
+        payload = self.payload(images)
+        with patch('rodin_service.provider_json', return_value=SUBMISSION) as provider:
+            result = self.service.submit(payload)
+            deadline = time.time() + 3
+            while self.service.load(result['id'])['status'] == 'submitting' and time.time() < deadline:
+                time.sleep(.01)
+            body, content_type = provider.call_args.args[2:4]
         message = BytesParser(policy=policy.default).parsebytes(('Content-Type: ' + content_type + '\r\n\r\n').encode() + body)
-        fields = {part.get_param('name', header='content-disposition'): part.get_payload(decode=True) for part in message.iter_parts()}
-        self.assertEqual(fields['images'], PNG)
+        image_parts = [part.get_payload(decode=True) for part in message.iter_parts()
+                       if part.get_param('name', header='content-disposition') == 'images']
+        fields = {part.get_param('name', header='content-disposition'): part.get_payload(decode=True)
+                  for part in message.iter_parts() if part.get_param('name', header='content-disposition') != 'images'}
+        self.assertEqual(image_parts, images)
+        self.assertEqual(fields['condition_mode'], b'concat')
         self.assertEqual(fields['tier'], b'Regular')
         self.assertEqual(fields['geometry_file_format'], b'glb')
         self.assertEqual(fields['material'], b'PBR')
+        self.assertEqual(result['imageCount'], 2)
 
     def test_submit_returns_promptly_while_provider_runs_in_background(self):
         entered, release = threading.Event(), threading.Event()
@@ -106,13 +144,36 @@ class ServiceTests(unittest.TestCase):
             another_id = self.payload()
             self.assertEqual(self.service.submit(another_id)['id'], job_id)
             provider.assert_not_called()
+    def test_multi_image_fingerprint_distinguishes_order_content_and_count(self):
+        first = self.payload([PNG, PNG + b'-second'])
+        job_id = self.submitted(first)
+        same_group = self.payload([PNG, PNG + b'-second'])
+        with patch('rodin_service.provider_json', return_value=SUBMISSION):
+            self.assertEqual(self.service.submit(same_group)['id'], job_id)
+            distinct = [self.service.submit(self.payload(images)) for images in (
+                [PNG + b'-second', PNG], [PNG], [PNG, PNG + b'-second', PNG], [PNG, PNG + b'-changed'])]
+            self.assertEqual(len({job_id, *(result['id'] for result in distinct)}), 5)
+            for result in distinct:
+                deadline = time.time() + 3
+                while self.service.load(result['id'])['status'] == 'submitting' and time.time() < deadline:
+                    time.sleep(.01)
+            self.assertTrue(all(self.service.load(result['id'])['status'] == 'queued' for result in distinct))
 
     def test_reusing_task_id_for_different_photo_is_rejected(self):
         payload = self.payload()
         self.submitted(payload)
-        payload['image'] = base64.b64encode(PNG + b'changed').decode()
+        payload['images'] = [base64.b64encode(PNG + b'changed').decode()]
         with self.assertRaises(ServiceError):
             self.service.submit(payload)
+
+    def test_session_key_can_be_restored_after_restart_with_pending_jobs(self):
+        job_id = self.submitted()
+        restarted = RodinService(self.temporary.name, '')
+        restarted.set_api_key('test-only-key')
+        with patch('rodin_service.provider_json', return_value={'jobs': [{'status': 'Generating'}]}) as provider:
+            self.assertEqual(restarted.refresh(job_id)['status'], 'generating')
+            self.assertEqual(provider.call_args.args[0], 'test-only-key')
+
 
     def test_task_subscriptions_are_never_returned_to_browser(self):
         job_id = self.submitted()
@@ -219,6 +280,60 @@ class HttpTests(unittest.TestCase):
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.base = 'http://127.0.0.1:' + str(self.server.server_port)
+    def config_request(self, key, token='test-token', origin=None):
+        headers = {'Content-Type': 'application/json', 'X-DeskVerse-Token': token}
+        if origin:
+            headers['Origin'] = origin
+        return urlopen(Request(self.base + '/api/generation/config', data=json.dumps({'apiKey': key}).encode(), headers=headers))
+
+    def test_config_get_post_response_is_unified_and_key_stays_in_memory(self):
+        with urlopen(self.base + '/api/generation/config') as response:
+            before = json.loads(response.read())
+            self.assertFalse(before['sessionKey'])
+        with self.config_request('session-only-key') as response:
+            after = json.loads(response.read())
+            self.assertEqual(set(after), set(before))
+            self.assertTrue(after['sessionKey'])
+            self.assertNotIn('session-only-key', json.dumps(after))
+        with urlopen(self.base + '/api/generation/config') as response:
+            self.assertNotIn('session-only-key', response.read().decode())
+        for path in self.root.rglob('*'):
+            if path.is_file():
+                self.assertNotIn(b'session-only-key', path.read_bytes())
+
+    def test_config_rejects_invalid_session_keys(self):
+        for key in ('', 'contains space', '中文密钥', 'line\nfeed', 'x' * 4097):
+            with self.assertRaises(HTTPError) as caught:
+                self.config_request(key)
+            self.assertEqual(caught.exception.code, 400)
+
+    def test_in_progress_task_rejects_key_change_but_allows_same_key(self):
+        entered, release = threading.Event(), threading.Event()
+        def provider(*args):
+            entered.set()
+            release.wait(2)
+            return SUBMISSION
+        with patch('rodin_service.provider_json', side_effect=provider):
+            payload = {'id': str(uuid4()), 'name': '杯子',
+                       'images': [base64.b64encode(PNG).decode()], 'confirmed': True}
+            response = urlopen(Request(self.base + '/api/generation/jobs', data=json.dumps(payload).encode(),
+                                       headers={'Content-Type': 'application/json', 'X-DeskVerse-Token': 'test-token'}))
+            response.read()
+            self.assertTrue(entered.wait(1))
+            with self.assertRaises(HTTPError) as caught:
+                self.config_request('different-key')
+            self.assertEqual(caught.exception.code, 409)
+            with self.config_request('private-test-key') as same:
+                self.assertTrue(json.loads(same.read())['sessionKey'])
+            release.set()
+
+    def test_config_mutation_requires_csrf_and_local_origin(self):
+        with self.assertRaises(HTTPError) as caught:
+            self.config_request('new-key', token='')
+        self.assertEqual(caught.exception.code, 403)
+        with self.assertRaises(HTTPError) as caught:
+            self.config_request('new-key', origin='https://attacker.example')
+        self.assertEqual(caught.exception.code, 403)
 
     def tearDown(self):
         self.server.shutdown()

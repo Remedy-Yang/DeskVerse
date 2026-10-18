@@ -16,6 +16,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import UUID, uuid4
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_TOTAL_IMAGE_BYTES = 40 * 1024 * 1024
+MAX_IMAGE_COUNT = 5
 MAX_MODEL_BYTES = 80 * 1024 * 1024
 API_BASE = 'https://api.hyper3d.com/api/v2/'
 
@@ -25,6 +27,14 @@ class ServiceError(Exception):
         super().__init__(message)
         self.status = status
         self.uncertain = uncertain
+
+
+def _validate_api_key(key):
+    if not isinstance(key, str) or not key or len(key) > 4096:
+        raise ServiceError('Rodin API 密钥格式无效。')
+    if any(ord(character) > 127 or character.isspace() or ord(character) < 32 or ord(character) == 127 for character in key):
+        raise ServiceError('Rodin API 密钥格式无效。')
+    return key
 
 
 def load_api_key(root):
@@ -37,9 +47,7 @@ def load_api_key(root):
                 if separator and name.strip() == 'RODIN_API_KEY':
                     key = value.strip().strip('\"\'')
                     break
-    if any(character.isspace() for character in key):
-        raise ServiceError('RODIN_API_KEY 格式无效，请检查本机 .env。', 503)
-    return key
+    return _validate_api_key(key) if key else ''
 
 
 def valid_id(value):
@@ -51,9 +59,8 @@ def valid_id(value):
     return value
 
 
-def decode_image(payload):
-    data = payload.get('image')
-    if not isinstance(data, str) or len(data) > (MAX_IMAGE_BYTES * 4 // 3 + 8):
+def decode_image(data):
+    if not isinstance(data, str) or len(data) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
         raise ServiceError('照片不能超过 20 MB。', 413)
     try:
         image = base64.b64decode(data, validate=True)
@@ -70,19 +77,50 @@ def decode_image(payload):
     raise ServiceError('仅支持 PNG、JPG 或 WebP 照片。')
 
 
-def multipart_image(image, content_type, filename):
+def decode_images(payload):
+    if not isinstance(payload, dict) or 'image' in payload:
+        raise ServiceError('请使用 images 数组提交照片。')
+    encoded = payload.get('images')
+    if not isinstance(encoded, list) or not 1 <= len(encoded) <= MAX_IMAGE_COUNT:
+        raise ServiceError('请上传 1 至 5 张照片。')
+    images = []
+    total = 0
+    for data in encoded:
+        image, mime, filename = decode_image(data)
+        total += len(image)
+        if total > MAX_TOTAL_IMAGE_BYTES:
+            raise ServiceError('照片总大小不能超过 40 MB。', 413)
+        images.append((image, mime, filename))
+    return images
+
+
+def images_fingerprint(images):
+    if len(images) == 1:
+        return hashlib.sha256(images[0][0]).hexdigest()
+    digest = hashlib.sha256()
+    digest.update(b'DeskVerse-images-v1\0')
+    digest.update(struct.pack('>I', len(images)))
+    for image, _, _ in images:
+        digest.update(struct.pack('>Q', len(image)))
+        digest.update(image)
+    return digest.hexdigest()
+
+
+def multipart_image(images):
     boundary = 'DeskVerse' + uuid4().hex
     pieces = []
     fields = {'tier': 'Regular', 'geometry_file_format': 'glb',
-              'material': 'PBR', 'quality': 'medium'}
+              'material': 'PBR', 'quality': 'medium', 'condition_mode': 'concat'}
     for name, value in fields.items():
         pieces.append(('--' + boundary + '\r\nContent-Disposition: form-data; '
                        'name="' + name + '"\r\n\r\n' + value + '\r\n').encode())
-    pieces.extend([
-        ('--' + boundary + '\r\nContent-Disposition: form-data; name="images"; '
-         'filename="' + filename + '"\r\nContent-Type: ' + content_type + '\r\n\r\n').encode(),
-        image, ('\r\n--' + boundary + '--\r\n').encode(),
-    ])
+    for image, content_type, filename in images:
+        pieces.extend([
+            ('--' + boundary + '\r\nContent-Disposition: form-data; name="images"; '
+             'filename="' + filename + '"\r\nContent-Type: ' + content_type + '\r\n\r\n').encode(),
+            image, b'\r\n',
+        ])
+    pieces.append(('--' + boundary + '--\r\n').encode())
     return b''.join(pieces), 'multipart/form-data; boundary=' + boundary
 
 
@@ -159,6 +197,7 @@ class RodinService:
         self.jobs.mkdir(parents=True, exist_ok=True)
         self.models.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.session_key = False
         # 上次进程中断时，不能判断上游是否扣费，保留记录并禁止自动重发。
         for path in self.jobs.glob('*.json'):
             job = json.loads(path.read_text(encoding='utf-8'))
@@ -179,12 +218,29 @@ class RodinService:
             raise ServiceError('找不到该生成任务。', 404)
         return json.loads(path.read_text(encoding='utf-8'))
 
+    def config(self):
+        with self.lock:
+            return bool(self.key), self.session_key
+
+    def set_api_key(self, key):
+        _validate_api_key(key)
+        with self.lock:
+            if self.key and key != self.key:
+                active = ('submitting', 'queued', 'generating', 'downloading')
+                if any(json.loads(path.read_text(encoding='utf-8')).get('status') in active
+                       for path in self.jobs.glob('*.json')):
+                    raise ServiceError('有进行中的任务，完成后才能更换 Rodin API 密钥。', 409)
+            self.key = key
+            self.session_key = True
+
     @staticmethod
     def public(job):
         result = {name: job.get(name) for name in ('id', 'name', 'status', 'created', 'error', 'consumed')}
+        result['imageCount'] = job.get('imageCount', 1)
         if job['status'] == 'ready':
             result['modelUrl'] = '/api/generation/models/' + job['id'] + '.glb'
         return result
+
 
     def list_jobs(self):
         with self.lock:
@@ -192,19 +248,22 @@ class RodinService:
             return [self.public(job) for job in sorted(jobs, key=lambda job: job['created'], reverse=True)]
 
     def submit(self, payload):
-        if not self.key:
-            raise ServiceError('尚未配置 Rodin API 密钥。', 503)
+        if not isinstance(payload, dict):
+            raise ServiceError('请求内容无效。')
         if payload.get('confirmed') is not True:
             raise ServiceError('请确认照片上传和积分消耗。')
         job_id = valid_id(payload.get('id'))
-        image, mime, filename = decode_image(payload)
-        fingerprint = hashlib.sha256(image).hexdigest()
+        images = decode_images(payload)
+        fingerprint = images_fingerprint(images)
         with self.lock:
+            if not self.key:
+                raise ServiceError('尚未配置 Rodin API 密钥。', 503)
+            key = self.key
             path = self.jobs / (job_id + '.json')
             if path.exists():
                 existing = self.load(job_id)
                 if existing['fingerprint'] != fingerprint:
-                    raise ServiceError('该任务编号已用于另一张照片。', 409)
+                    raise ServiceError('该任务编号已用于另一组照片。', 409)
                 return self.public(existing)
             for entry in self.jobs.glob('*.json'):
                 existing = json.loads(entry.read_text(encoding='utf-8'))
@@ -212,16 +271,16 @@ class RodinService:
                     return self.public(existing)
             job = {'id': job_id, 'name': str(payload.get('name') or '照片模型')[:80],
                    'status': 'submitting', 'created': time.time(), 'fingerprint': fingerprint,
-                   'error': '', 'consumed': None, 'checked': 0}
+                   'imageCount': len(images), 'error': '', 'consumed': None, 'checked': 0}
             self.save(job)
-            worker = threading.Thread(target=self._submit_job, args=(job, image, mime, filename), daemon=True)
+            worker = threading.Thread(target=self._submit_job, args=(job, images, key), daemon=True)
             worker.start()
             return self.public(job)
 
-    def _submit_job(self, job, image, mime, filename):
+    def _submit_job(self, job, images, key):
         try:
-            body, content_type = multipart_image(image, mime, filename)
-            result = provider_json(self.key, 'rodin', body, content_type)
+            body, content_type = multipart_image(images)
+            result = provider_json(key, 'rodin', body, content_type)
             subscription = result.get('jobs')
             if not result.get('uuid') or not isinstance(subscription, dict) or not subscription.get('subscription_key'):
                 raise ServiceError('提交结果不完整，请在 Rodin 控制台核对；不会自动重发。', 502, uncertain=True)

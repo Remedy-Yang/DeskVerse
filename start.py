@@ -10,7 +10,7 @@ import webbrowser
 
 from rodin_service import RodinService, ServiceError, load_api_key
 
-MAX_REQUEST = 28 * 1024 * 1024
+MAX_REQUEST = 56 * 1024 * 1024
 
 
 class DeskVerseServer(ThreadingHTTPServer):
@@ -56,8 +56,10 @@ class Handler(SimpleHTTPRequestHandler):
             if any(part.startswith('.') for part in unquote(path).split('/') if part):
                 raise ServiceError('文件不存在。', 404)
             if path == '/api/generation/config':
-                return self.json_response({'configured': bool(self.service.key), 'csrf': self.csrf,
-                                           'provider': 'Rodin', 'tier': 'Regular'})
+                configured, session_key = self.service.config()
+                return self.json_response({'configured': configured, 'csrf': self.csrf,
+                                           'provider': 'Rodin', 'tier': 'Regular',
+                                           'sessionKey': session_key})
             if path == '/api/generation/jobs':
                 return self.json_response({'jobs': self.service.list_jobs()})
             if path.startswith('/api/generation/jobs/'):
@@ -83,7 +85,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.local_request()
             if not secrets.compare_digest(self.headers.get('X-DeskVerse-Token', '').encode('utf-8'), self.csrf.encode('utf-8')):
                 raise ServiceError('请求验证失败，请刷新页面。', 403)
-            if urlparse(self.path).path != '/api/generation/jobs':
+            path = urlparse(self.path).path
+            if path not in ('/api/generation/jobs', '/api/generation/config'):
                 raise ServiceError('接口不存在。', 404)
             if self.headers.get('Content-Type') != 'application/json':
                 raise ServiceError('请求格式无效。', 415)
@@ -100,6 +103,12 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ServiceError('请求内容损坏或接收超时。')
             if not isinstance(body, dict):
                 raise ServiceError('请求内容无效。')
+            if path == '/api/generation/config':
+                self.service.set_api_key(body.get('apiKey'))
+                configured, session_key = self.service.config()
+                return self.json_response({'configured': configured, 'csrf': self.csrf,
+                                           'provider': 'Rodin', 'tier': 'Regular',
+                                           'sessionKey': session_key})
             self.json_response(self.service.submit(body), 202)
         except ServiceError as error:
             self.json_response({'error': str(error)}, error.status)
