@@ -48,10 +48,10 @@ try{
  await page.locator('[data-workspace="a"]').click();assert.ok((await state()).objects.some(o=>o.id===main.id));
  await page.locator('[data-workspace="b"]').click();assert.ok(!(await state()).objects.some(o=>o.id===main.id));await page.locator('#undo').click();assert.ok((await state()).objects.some(o=>o.id===main.id));
  await page.locator('[data-workspace="a"]').click();await page.evaluate(id=>window.deskverse.select(id),main.id);
- await page.locator('#size-chart-file').setInputFiles('deskmodels/杯子/尺寸图.jpg');await page.waitForFunction(()=>document.querySelectorAll('#size-variant-options button').length===2);
+ await page.locator('#size-chart-file').setInputFiles('models/04-生活摆件/杯子/尺寸图.jpg');await page.waitForFunction(()=>document.querySelectorAll('#size-variant-options button').length===2);
  const aImage=await page.locator('#size-chart-image').getAttribute('src');await page.locator('#size-variant-options button').first().click();const aSize=(await state()).objects.find(o=>o.id===main.id).dimensionsCm;
  await page.locator('[data-workspace="b"]').click();assert.equal(await page.locator('#size-chart-preview').isVisible(),false);
- const chart=await readFile('deskmodels/杯子/尺寸图.jpg');await page.locator('#size-chart-file').setInputFiles({name:'B-chart.jpg',mimeType:'image/jpeg',buffer:chart});await page.waitForFunction(()=>document.querySelectorAll('#size-variant-options button').length===2);await page.locator('#size-variant-options button').last().click();
+ const chart=await readFile('models/04-生活摆件/杯子/尺寸图.jpg');await page.locator('#size-chart-file').setInputFiles({name:'B-chart.jpg',mimeType:'image/jpeg',buffer:chart});await page.waitForFunction(()=>document.querySelectorAll('#size-variant-options button').length===2);await page.locator('#size-variant-options button').last().click();
  const bImage=await page.locator('#size-chart-image').getAttribute('src'),bSize=(await state()).objects.find(o=>o.id===main.id).dimensionsCm;assert.notEqual(aImage,bImage);assert.notDeepEqual(aSize,bSize);
  await page.locator('[data-workspace="a"]').click();assert.equal(await page.locator('#size-chart-image').getAttribute('src'),aImage);assert.deepEqual((await state()).objects.find(o=>o.id===main.id).dimensionsCm,aSize);await page.locator('#size-chart-image').evaluate(image=>image.decode());
  await page.locator('[data-workspace="b"]').click();assert.equal(await page.locator('#size-chart-image').getAttribute('src'),bImage);assert.deepEqual((await state()).objects.find(o=>o.id===main.id).dimensionsCm,bSize);

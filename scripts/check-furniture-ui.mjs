@@ -46,7 +46,7 @@ try{
  await page.locator('#view-top').click();assert.equal((await state()).view.cameraType,'OrthographicCamera');
  await page.locator('#chair-pull').click();await page.locator('#chair-position-range').fill('-20');await page.locator('#chair-position-range').dispatchEvent('input');const chairAfterPush=(await state()).objects.find(o=>o.name==='椅子');assert.ok(chairAfterPush.position[2]<chair.position[2]+35);
  // Place a real, calibrated mouse into a right drawer and verify X travel.
- await page.locator('#file-input').setInputFiles('deskmodels/鼠标/base_basic_pbr.glb');
+ await page.locator('#file-input').setInputFiles('models/02-数码外设/鼠标/旧目录版本-待核对/base_basic_pbr.glb');
  await page.waitForFunction(()=>window.deskverse.getState().objects.length===4&&document.getElementById('loading').hidden,null,{timeout:60000});
  await page.locator('#uniform').uncheck();for(const [id,value] of [['dx','6.4'],['dy','3.9'],['dz','12']]){await page.locator('#'+id).fill(value);await page.locator('#'+id).dispatchEvent('change');}
  await setOpening('right-drawer-1',1);await page.locator('#drawer-store').click();

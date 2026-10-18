@@ -3,7 +3,7 @@ import {mkdir,readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const output=resolve('.deskverse/qa/placement');await mkdir(output,{recursive:true});
-const fixture=await readFile(process.env.PHOTO_MODEL_PATH||'deskmodels/杯子/base_basic_pbr.glb');
+const fixture=await readFile(process.env.PHOTO_MODEL_PATH||'models/04-生活摆件/杯子/base_basic_pbr.glb');
 const jobId='00000000-0000-4000-8000-000000000777',browser=await chromium.launch({channel:'chrome',headless:true}),errors=[];
 const near=(a,b)=>assert.ok(Math.abs(a-b)<.001,`${a} != ${b}`);
 try{
@@ -42,7 +42,7 @@ try{
  await page.locator('#orient-model').click();near((await state()).objects.at(-1).dimensionsCm[1],16.8);
  await page.locator('#undo').click();near((await state()).objects.at(-1).dimensionsCm[1],6.6);await page.locator('#redo').click();near((await state()).objects.at(-1).dimensionsCm[1],16.8);
  await page.selectOption('#reference-category','mouse');assert.deepEqual((await state()).objects.at(-1).dimensionsCm.map(n=>+n.toFixed(3)),[6.4,3.9,12]);
- await page.locator('#size-chart-file').setInputFiles('deskmodels/杯子/尺寸图.jpg');await page.waitForFunction(()=>document.querySelectorAll('#size-variant-options button').length===3);
+ await page.locator('#size-chart-file').setInputFiles('models/04-生活摆件/杯子/尺寸图.jpg');await page.waitForFunction(()=>document.querySelectorAll('#size-variant-options button').length===3);
  await page.locator('#size-variant-options button').nth(1).click();photo=(await state()).objects.at(-1);assert.deepEqual(photo.dimensionsCm.map(n=>+n.toFixed(3)),[7,22,12]);assert.equal(photo.calibrated,true);assert.equal(photo.referenceSize,null);
  await page.selectOption('#reference-category','can');assert.equal(await page.locator('#size-variant-options button').count(),3);assert.equal(await page.locator('#reference-options button').count(),3);assert.equal(await page.locator('#size-chart-preview').isVisible(),true);
  const overlap=await page.evaluate(id=>window.deskverse.setTransform(id,{position:[0,0,0]}),photoId);assert.equal(overlap.accepted,true);assert.equal(overlap.collision.detected,true);assert.equal(overlap.collision.blocked,false);assert.deepEqual((await state()).objects.at(-1).position,[0,0,0]);assert.doesNotMatch(await page.locator('#collision-status').innerText(),/已限制|已阻止|拦截/);

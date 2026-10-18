@@ -1,6 +1,16 @@
 import * as THREE from 'three';
 export const AXES = ['x', 'y', 'z'];
 export const MAX_FILE_SIZE = 80 * 1024 * 1024;
+// 当前场景引用的 GLB 原始字节；同一来源拆出的桌柜与椅子只计一次。
+export function sceneModelBytes(records) {
+  const sources=new Set();let bytes=0;
+  for(const record of records){
+    const source=record.layoutSource,key=source?.key??record.id;
+    if(sources.has(key))continue;
+    sources.add(key);bytes+=source?.bytes??record.bytes??0;
+  }
+  return bytes;
+}
 export function inspectGLB(buffer) {
   if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 20) throw new Error('文件不完整，请重新导出 GLB。');
   const view = new DataView(buffer);

@@ -8,7 +8,7 @@ const base=process.env.DESKVERSE_URL||'http://127.0.0.1:8002';
 const output=resolve('.deskverse/qa');
 await mkdir(output,{recursive:true});
 const fixture=await readFile('dist/assets/demo-lamp.glb');
-const photoBytes=await readFile('deskmodels/杯子/尺寸图.jpg');
+const photoBytes=await readFile('models/04-生活摆件/杯子/尺寸图.jpg');
 const tiny=new PNG({width:1,height:1});tiny.data.set([24,128,240,255]);
 const secondBytes=PNG.sync.write(tiny);
 const firstPhoto={name:'杯子正面.jpg',mimeType:'image/jpeg',buffer:photoBytes};

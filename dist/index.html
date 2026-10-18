@@ -6,13 +6,15 @@
 <title>DeskVerse Studio · Atelier 01 三维摆放工作台</title>
 <link rel="stylesheet" href="./style.css">
 <link rel="stylesheet" href="./feature.css">
+<link rel="stylesheet" href="./panel-resize.css">
+<link rel="stylesheet" href="./model-library.css">
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
 </head>
 <body class="atelier-studio" data-theme="atelier">
 <header class="topbar">
   <a class="brand" href="./" aria-label="DeskVerse 首页"><span class="brand-icon" data-icon="cube"></span><strong>DeskVerse<span>STUDIO</span></strong></a>
   <div class="workspace-switch" role="group" aria-label="布局方案"><button type="button" data-workspace="a" class="active" aria-pressed="true" title="布局 A，独立保存本次会话的修改">方案 A</button><button type="button" data-workspace="b" aria-pressed="false" title="布局 B，首次切换时复制当前方案">方案 B</button></div>
-  <div class="header-actions"><span class="privacy"><span data-icon="shield"></span>本地摆放 · 建模需云端</span><details class="theme-picker"><summary aria-label="选择颜色主题">主题</summary><div class="theme-options" role="group" aria-label="颜色主题"><button type="button" data-theme-choice="atelier" aria-pressed="true">暖调造物台</button><button type="button" data-theme-choice="obsidian" aria-pressed="false">暗夜实验室</button><button type="button" data-theme-choice="blueprint" aria-pressed="false">氰版工程图</button></div></details><button id="toggle-assets" type="button" class="button subtle panel-toggle" aria-controls="assets-dock" aria-expanded="false" aria-label="打开或收起场景工具" title="场景工具"><span data-icon="cube"></span>资产</button><button id="toggle-inspector" type="button" class="button subtle panel-toggle" aria-controls="inspector-dock" aria-expanded="false" aria-label="打开或收起物品属性" title="物品属性"><span data-icon="sliders"></span>属性</button><button id="focus-ui" type="button" class="button subtle" aria-label="切换专注视图" aria-pressed="false" title="隐藏或恢复两侧面板"><span data-icon="focus"></span><span>专注</span></button><button id="import-layout" type="button" class="button subtle" aria-label="导入布局" title="选择布局 JSON；旧版自定义布局请同时选择原始 GLB。替换当前方案，可撤销"><span data-icon="upload"></span>导入布局</button><button id="export" class="button subtle" aria-label="导出布局" title="导出当前方案的布局 JSON"><span data-icon="download"></span>导出布局</button><button id="render-export" type="button" class="button subtle" aria-label="导出高清效果图" title="选择视角并导出当前光照下的高清 PNG"><span data-icon="camera"></span><span>效果图</span></button><button id="import-top" class="button primary" aria-label="导入 GLB" title="导入 GLB 模型"><span data-icon="plus"></span>导入 GLB</button></div>
+  <div class="header-actions"><span class="privacy"><span data-icon="shield"></span>本地摆放 · 建模需云端</span><details class="theme-picker"><summary aria-label="选择颜色主题">主题</summary><div class="theme-options" role="group" aria-label="颜色主题"><button type="button" data-theme-choice="atelier" aria-pressed="true">暖调造物台</button><button type="button" data-theme-choice="obsidian" aria-pressed="false">暗夜实验室</button><button type="button" data-theme-choice="blueprint" aria-pressed="false">氰版工程图</button></div></details><button id="toggle-assets" type="button" class="button subtle panel-toggle" aria-controls="assets-dock" aria-expanded="false" aria-label="打开或收起场景工具" title="场景工具"><span data-icon="cube"></span>资产</button><button id="toggle-inspector" type="button" class="button subtle panel-toggle" aria-controls="inspector-dock" aria-expanded="false" aria-label="打开或收起物品属性" title="物品属性"><span data-icon="sliders"></span>属性</button><button id="focus-ui" type="button" class="button subtle" aria-label="切换专注视图" aria-pressed="false" title="隐藏或恢复两侧面板"><span data-icon="focus"></span><span>专注</span></button><button id="import-layout" type="button" class="button subtle" aria-label="导入布局" title="选择布局 JSON；旧版自定义布局请同时选择原始 GLB。替换当前方案，可撤销"><span data-icon="upload"></span>导入布局</button><button id="export" class="button subtle" aria-label="导出布局" title="导出当前方案的布局 JSON"><span data-icon="download"></span>导出布局</button><button id="render-export" type="button" class="button subtle" aria-label="导出高清效果图" title="选择视角并导出当前光照下的高清 PNG"><span data-icon="camera"></span><span>导出效果图</span></button></div>
 </header>
 <input id="layout-input" type="file" accept=".json,.glb,application/json,model/gltf-binary" multiple hidden>
 <div class="workspace">
@@ -20,14 +22,14 @@
     <div class="panel-heading"><div><div class="eyebrow">SCENE COLLECTION</div><h1>空间标本匣</h1></div><span class="counter" id="object-count">0</span></div>
     <div class="panel-tabs" role="tablist" aria-label="场景工具分类"><button id="assets-tab" type="button" role="tab" class="active" data-panel-tab="assets" aria-controls="assets-pane" aria-selected="true">资产</button><button id="furniture-tab" type="button" role="tab" data-panel-tab="furniture" aria-controls="furniture-pane" aria-selected="false" tabindex="-1">家具</button><button id="lighting-tab" type="button" role="tab" data-panel-tab="lighting" aria-controls="lighting-pane" aria-selected="false" tabindex="-1">光照</button></div>
     <div id="assets-pane" class="left-pane" role="tabpanel" aria-labelledby="assets-tab">
-    <button id="upload-zone" class="upload-zone"><span class="upload-symbol" data-icon="upload"></span><strong>把灵感放进空间</strong><span>点击导入，或拖入 GLB 文件</span><small>支持多个独立模型 · 单个 ≤ 80 MB</small></button>
-    <section class="photo-generation" aria-label="照片建模"><button id="photo-open" class="button primary full"><span data-icon="cube"></span>照片生成 GLB</button><div id="generation-jobs" class="generation-jobs" aria-live="polite"></div></section>
-    <div class="section-label">当前场景 <span id="scene-unit">单位 · cm</span></div>
+    <section class="asset-create" aria-label="创建模型"><div class="asset-section-heading"><div><span class="eyebrow">FROM PHOTO TO SPACE</span><h2>让物品，进入你的桌面。</h2></div></div><p class="asset-section-note">拍下身边的物品，生成专属三维模型。</p><section class="photo-generation" aria-label="照片建模"><button id="photo-open" class="button primary full"><span data-icon="camera"></span>照片生成 GLB</button><div id="generation-jobs" class="generation-jobs" aria-live="polite"></div></section><button id="upload-zone" class="button subtle full"><span data-icon="upload"></span>导入本地 GLB</button></section>
+    <section class="asset-collection" aria-label="默认模型资产库"><div class="asset-section-heading"><div><span class="eyebrow">READY TO PLACE</span><h2>模型资产库</h2></div><span class="counter" id="model-library-count"></span></div><p class="asset-section-note">点击添加到场景，可重复放入。尺寸待实物校准。</p><p id="scene-resources" class="asset-section-note" title="仅统计当前方案引用的 GLB 文件大小，不代表内存或显存；撤销历史仍可能保留已删除资源。">当前场景模型 0.0 MiB · 不设累计上限</p><div id="model-library" class="model-library"></div></section>
+    <details class="asset-scene"><summary>当前场景与固定资产 <span id="scene-unit">单位 · cm</span></summary>
     <div class="surface-row"><span class="asset-icon" data-icon="table"></span><div><strong id="surface-name">参考桌面</strong><small id="surface-size">140 × 75 cm · 辅助平面</small></div><span class="tiny-tag">基准</span></div>
     <div id="collision-status" class="collision-status" role="status" aria-live="polite">自由移动 · 碰撞仅提醒</div>
     <div id="object-list" class="object-list" aria-label="场景中的模型"></div>
     <div class="left-actions"><button id="load-real" class="button primary full"><span data-icon="table"></span>载入我的桌子和显示器</button><button id="import-table" class="button subtle full" title="新桌子解析成功后替换当前桌柜，保留其他物品，可撤销"><span data-icon="table"></span><span id="import-table-label">替换当前桌子 GLB</span></button><button id="load-demo" class="text-button"><span data-icon="refresh"></span>载入示例模型</button></div>
-    <div class="bottom-note"><span class="step-label">DeskVerse Studio</span><p>本地场景</p></div>
+    </details>
     </div>
     <div id="furniture-pane" class="left-pane" role="tabpanel" aria-labelledby="furniture-tab" hidden>
       <div class="section-label">家具机构 <span>开合 · 收纳 · 坐姿</span></div>
@@ -51,6 +53,7 @@
       <p class="pod-caption">光照只影响预览效果，不改变模型材质、尺寸和布局。</p>
     </div>
   </aside>
+  <div id="assets-resizer" class="assets-resizer" role="separator" tabindex="0" aria-label="调整左侧控制台宽度" aria-orientation="vertical" aria-controls="assets-dock" title="拖拽调整宽度；方向键微调，Home / End 调至最窄 / 最宽"></div>
   <main id="viewport" class="viewport" aria-label="三维摆放画布" tabindex="0">
     <div class="atelier-heading"><span>Atelier No. 01</span><small>三维桌面摆放工作台</small></div>
     <div class="optical-scale" aria-hidden="true"><span></span><small>空间摆放 · 厘米工作制</small></div>
