@@ -17,6 +17,7 @@ import {LayoutSchemes} from './workspaces.js';
 import {createStudioFloor,fitDirectionalShadow} from './environment.js';
 import {DeskWireframe} from './desk-view.js';
 import {RENDER_PRESETS,RENDER_SIZES,createRenderCamera,renderSceneCanvas} from './render-export.js';
+import {LAYOUT_ASSETS,legacyModel,validateLayout,encodeModel,decodeModel} from './layout-import.js';
 const $=id=>document.getElementById(id);
 const MAX_SIZE_CHART_BYTES=20*1024*1024;
 let sizeOcrWorkerPromise=null;
@@ -388,7 +389,7 @@ function endSeatPan(event){if(seatPan&&event.pointerId===seatPan.pointerId){even
 canvas.addEventListener('pointerup',event=>{if(endSeatPan(event)||endDrag(event))return;if(event.button!==0||!pointerDown||gizmoGesture||busy)return;const distance=Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y);if(distance>=5)return;if(mode==='place'){event.preventDefault();event.stopImmediatePropagation();placeSelected(event);return;}if(table()){point(event);const first=raycaster.intersectObjects(activeIds.map(id=>records.get(id).root),true)[0];if(first?.object.userData.drawerId){drawer=drawers.find(d=>d.id===first.object.userData.drawerId);renderDrawerControls();animateDrawer(drawer.opening>.5?0:1);return;}if(first?.object.userData.doorId){animateDoor(door.opening>.5?0:1);return;}}const r=hit(event);select(r?.id);},true);
 canvas.addEventListener('pointercancel',event=>{if(!endSeatPan(event))endDrag(event);},true);
 canvas.addEventListener('dblclick',event=>{const r=hit(event);if(r){select(r.id);focus(r.root);}});
-function setBusy(value,text){busy=value;$('loading').hidden=!value;if(text)$('loading-text').textContent=text;for(const id of ['import-top','upload-zone','import-table','load-real','load-demo','delete-object','confirm-size','center-object','turn-left','turn-right','reset-rotation','export','render-export','camera-height-toggle','camera-height-input','camera-height-range','view-distance-range','seat-view','seat-distance-range','chair-height-range','person-height','lighting-preset','lighting-intensity','lighting-warmth'])$(id).disabled=value;for(const button of document.querySelectorAll('[data-distance],[data-seat-distance],[data-workspace],[data-projection]'))button.disabled=value;$('size-chart-button').disabled=value||!!item()?.locked;$('add-size-variant').disabled=value||!!item()?.locked;renderReferenceSizes(item());renderDrawerControls();historyButtons();if(!value)inspector();}
+function setBusy(value,text){busy=value;$('loading').hidden=!value;if(text)$('loading-text').textContent=text;for(const id of ['import-layout','import-top','upload-zone','import-table','load-real','load-demo','delete-object','confirm-size','center-object','turn-left','turn-right','reset-rotation','export','render-export','camera-height-toggle','camera-height-input','camera-height-range','view-distance-range','seat-view','seat-distance-range','chair-height-range','person-height','lighting-preset','lighting-intensity','lighting-warmth'])$(id).disabled=value;for(const button of document.querySelectorAll('[data-distance],[data-seat-distance],[data-workspace],[data-projection]'))button.disabled=value;$('size-chart-button').disabled=value||!!item()?.locked;$('add-size-variant').disabled=value||!!item()?.locked;renderReferenceSizes(item());renderDrawerControls();historyButtons();if(!value)inspector();}
 // 解析、尺寸归一化和机构准备均在离线对象上完成；失败不会移除当前桌柜。
 async function prepareBuffer(buffer,sourceFile,role='item',options={}){
  if(buffer.byteLength>MAX_FILE_SIZE)throw new Error('单个模型不能超过 80 MB，请先简化网格或贴图。');
@@ -398,6 +399,8 @@ async function prepareBuffer(buffer,sourceFile,role='item',options={}){
  const category=reference?.categoryId||inferCategory(options.name||sourceFile),model=reference?.model||(role==='table'&&options.calibrateHeightCm?prepareDeskModel(gltf.scene):gltf.scene);
  const {root,baseSize}=normalizeModel(model,options.targetSize||(role==='table'?140:32)),id=crypto.randomUUID();root.userData.recordId=id;root.userData.isDesk=role==='table';
  const r={id,root,baseSize,name:options.name||sourceFile.replace(/\.glb$/i,''),sourceFile,role,bytes:buffer.byteLength,demo:!!options.demo,calibrated:false,grounded:false,surfaceY:role==='table'?null:topY(),surfaceHeightCm:null,surfaceFootprintCm:null,locked:role==='table'||Boolean(options.locked),icon:options.icon,initialDimensionsCm:null,sizeVariants:[],activeSizeVariantId:null,sizeChartUrl:null,sizeChartName:null,sizeOcrStatus:null,builtinAsset:options.builtinAsset||null};
+ const builtin=options.builtinAsset==='desk'?'desk':options.builtinAsset==='monitor'?'monitor':options.demo&&sourceFile==='demo-lamp.glb'?'demo-lamp':options.demo&&sourceFile==='demo-monitor.glb'?'demo-monitor':null;
+ r.layoutSource={key:id,sourceFile,role,builtin,options:{...options},buffer:builtin?null:buffer};
  Object.assign(r,{referenceData:reference?.referenceData,orientationRoot:reference?.orientationRoot,referenceCategoryId:category,referenceSizeIndex:null,photoJobId:options.photoJobId??null});
  if(options.photoGenerated)applyReferenceSize(r,category);
  if(options.dimensions){for(const [index,axis] of AXES.entries())setDimension(r,axis,options.dimensions[index],false);r.calibrated=options.calibrated!==false;}else if(options.calibrateHeightCm){setDimension(r,'y',options.calibrateHeightCm,true);if(options.depthCm)setDimension(r,'z',options.depthCm,false);r.calibrated=options.calibrated!==false;}
@@ -457,9 +460,83 @@ $('confirm-size').onclick=()=>mutate(r=>{r.calibrated=true;toast('已标记为�
 $('turn-left').onclick=()=>mutate(r=>r.root.rotation.y-=Math.PI/4);$('turn-right').onclick=()=>mutate(r=>r.root.rotation.y+=Math.PI/4);$('reset-rotation').onclick=()=>mutate(r=>r.root.rotation.set(0,0,0));
 $('center-object').onclick=()=>mutate(r=>{r.root.position.x=0;r.root.position.z=0;});
 function removeSelected(){if(!item()||busy||planDrag)return;const r=item();if(r.locked){toast('桌子是固定资产；请在资产页使用“替换当前桌子 GLB”。');return;}transform.detach();scene.remove(r.root);activeIds=activeIds.filter(id=>id!==r.id);surfaceUpdate();refreshCollision();select(activeIds.at(-1));checkpoint();emit();toast('已删除 '+r.name+'，可撤销恢复。');}
-$('delete-object').onclick=removeSelected;$('undo').onclick=()=>{if(!planDrag)restore(history.undo());};$('redo').onclick=()=>{if(!planDrag)restore(history.redo());};
-function exportLayout(){const blob=new Blob([JSON.stringify({...exportState(),note:'布局数据不包含 GLB 文件。请将原始 GLB 与此 JSON 一起交给开发同伴。'},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='DeskVerse-layout.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('已导出布局 JSON。请同时保留原始 GLB 文件。');}
+$('delete-object').onclick=removeSelected;$('undo').onclick=()=>{if(!busy&&!planDrag)restore(history.undo());};$('redo').onclick=()=>{if(!busy&&!planDrag)restore(history.redo());};
+function exportLayout(){
+ const state=exportState(),models={};
+ for(const object of state.objects){
+  const r=records.get(object.id),source=r.layoutSource;object.modelKey=source.key;object.modelPart=r.furniture==='chair'?'chair':'root';
+  object.sizeVariants=structuredClone(r.sizeVariants);object.activeSizeVariantId=r.activeSizeVariantId;
+  if(!Object.hasOwn(models,source.key))models[source.key]={sourceFile:source.sourceFile,role:source.role,builtin:source.builtin,options:source.options,...(source.buffer?{data:encodeModel(source.buffer)}:{})};
+ }
+ const blob=new Blob([JSON.stringify({...state,models,note:'使用“导入布局”恢复当前方案；自定义 GLB 已内嵌，内置资源由本机加载。'},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='DeskVerse-layout.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('已导出可恢复的布局 JSON（含自定义模型）。');
+}
 $('export').onclick=exportLayout;$('render-json').onclick=exportLayout;
+// 全部资源离线准备成功后才替换当前方案，旧对象留给撤销及另一方案。
+async function importLayout(files){
+ if(busy||planDrag||activeDrag||seatPan||transform.dragging)return;
+ const list=[...files],jsonFiles=list.filter(file=>/\.json$/i.test(file.name));
+ if(!list.length)return;
+ if(jsonFiles.length!==1){toast('请选择一个布局 JSON；旧版布局可同时选择所需的原始 GLB。');return;}
+ const staged=[],groups=new Map();let stagedBytes=0,committed=false;
+ const disposePrepared=()=>{const geometries=new Set(),materials=new Set(),textures=new Set();for(const r of staged)r.root.traverse(node=>{if(node.geometry)geometries.add(node.geometry);for(const material of (Array.isArray(node.material)?node.material:[node.material]))if(material){materials.add(material);for(const value of Object.values(material))if(value?.isTexture)textures.add(value);}});for(const value of [...geometries,...materials,...textures])value.dispose();};
+ setBusy(true,'正在读取布局，原场景保持不变…');
+ try{
+  if(jsonFiles[0].size>340*1024*1024)throw new Error('布局 JSON 不能超过 340 MB。');
+  const state=validateLayout(JSON.parse(await jsonFiles[0].text())),items=[],used=new Set();
+  if(state.lighting&&!Object.hasOwn(lightingPresets,state.lighting.preset))throw new Error('未知光照预设。');
+  for(const object of state.objects){
+   const legacy=legacyModel(object),descriptor=object.modelKey!==undefined?state.models[object.modelKey]:legacy,key=object.modelKey??legacy.key;
+   if(!descriptor||typeof descriptor.sourceFile!=='string'||!['table','item'].includes(descriptor.role)||descriptor.builtin&&!Object.hasOwn(LAYOUT_ASSETS,descriptor.builtin))throw new Error('模型来源无效：'+object.name);
+   const part=object.modelPart??legacy.part;if(!['root','chair'].includes(part))throw new Error('模型部件无效。');
+   let prepared=groups.get(key);
+   if(!prepared){
+    let buffer,options=descriptor.options||{},asset=descriptor.builtin?LAYOUT_ASSETS[descriptor.builtin]:null;
+    // 只转交现有导入器使用的字段，禁止 JSON 注入资源 URL 或其他运行时对象。
+    options=Object.fromEntries(['name','categoryId','photoGenerated','photoJobId','demo','locked','icon','targetSize','dimensions','calibrated','calibrateHeightCm','depthCm','surfaceHeightCm','surfaceFootprintCm','x','z','yaw'].filter(key=>Object.hasOwn(options,key)).map(key=>[key,options[key]]));
+    for(const key of ['targetSize','calibrateHeightCm','depthCm'])if(options[key]!==undefined&&(!Number.isFinite(options[key])||options[key]<=0||options[key]>100000))throw new Error('模型初始尺寸无效。');
+    for(const key of ['surfaceHeightCm','x','z','yaw'])if(options[key]!=null&&(!Number.isFinite(options[key])||Math.abs(options[key])>100000))throw new Error('模型初始位置无效。');
+    for(const key of ['dimensions','surfaceFootprintCm'])if(options[key]!=null&&(!Array.isArray(options[key])||options[key].length!==(key==='dimensions'?3:2)||options[key].some(n=>!Number.isFinite(n)||n<=0||n>100000)))throw new Error('模型尺寸数据无效。');
+    if(asset){
+     if(descriptor.role!==asset.role)throw new Error('内置模型类型不匹配。');
+     const response=await fetch('./assets/'+asset.file);if(!response.ok)throw new Error('内置模型加载失败：'+asset.file);buffer=await response.arrayBuffer();options={...asset.options,...options};
+    }else if(descriptor.data!==undefined)buffer=decodeModel(descriptor.data);
+    else{
+     const matching=list.filter(file=>file.name===descriptor.sourceFile);
+     if(matching.length>1)throw new Error('存在同名 GLB，请只选择一个：'+descriptor.sourceFile);
+     const cached=[...records.values()].find(r=>r.layoutSource?.sourceFile===descriptor.sourceFile)?.layoutSource;
+     if(matching[0]){if(matching[0].size>MAX_FILE_SIZE)throw new Error('模型超过 80 MB。');buffer=await matching[0].arrayBuffer();}
+     else if(cached?.buffer){buffer=cached.buffer;options=cached.options;}
+     else throw new Error('缺少模型 '+descriptor.sourceFile+'。请重新点击“导入布局”，同时选择 JSON 和该原始 GLB。');
+    }
+    if(totalBytes+stagedBytes+buffer.byteLength>240*1024*1024)throw new Error('恢复后会超过本次会话 240 MB 模型上限，请刷新后导入。');
+    $('loading-text').textContent='正在恢复 '+object.name+'…';
+    prepared=await prepareBuffer(buffer,descriptor.sourceFile,descriptor.role,{...options,includeChair:true});
+    staged.push(prepared.record,...prepared.children);stagedBytes+=buffer.byteLength;groups.set(key,prepared);
+   }
+   const r=part==='chair'?prepared.children.find(r=>r.furniture==='chair'):prepared.record;
+   if(!r||used.has(r.id)||r.role!==object.role)throw new Error('布局模型部件缺失或重复：'+object.name);used.add(r.id);
+   if(object.modelOrientation)setModelOrientation(r,new THREE.Quaternion().fromArray(object.modelOrientation));
+   r.root.scale.fromArray(object.scale);r.name=object.name;r.calibrated=!!object.calibrated;r.grounded=!!object.grounded;r.surfaceY=object.surfaceY??null;
+   r.root.position.fromArray(object.position);r.root.rotation.set(...object.rotation.map(THREE.MathUtils.degToRad),'XYZ');
+   r.sizeVariants=structuredClone(object.sizeVariants||[]);r.activeSizeVariantId=object.activeSizeVariantId??null;r.storage=object.storage?{drawerId:object.storage.drawerId}:null;
+   r.referenceSizeIndex=object.referenceSize?.index??null;r.referenceCategoryId=object.referenceSize?.category??r.referenceCategoryId;
+   items.push({id:r.id,name:r.name,position:r.root.position.toArray(),rotation:r.root.rotation.toArray(),scale:r.root.scale.toArray(),orientation:r.orientationRoot?.quaternion.toArray(),grounded:r.grounded,surfaceY:r.surfaceY,storage:r.storage,calibrated:r.calibrated,sizeVariants:r.sizeVariants,activeSizeVariantId:r.activeSizeVariantId,referenceCategoryId:r.referenceCategoryId,referenceSizeIndex:r.referenceSizeIndex});
+  }
+  const importedTable=staged.find(r=>used.has(r.id)&&r.role==='table');
+  for(const entry of state.drawers||[])if(!importedTable?.drawerSystems?.some(d=>d.id===entry.id))throw new Error('布局抽屉与模型不匹配。');
+  if(state.doors?.length&&!importedTable?.doorSystem)throw new Error('布局柜门与模型不匹配。');
+  checkpoint();for(const r of staged)records.set(r.id,r);totalBytes+=stagedBytes;committed=true;
+  restore({items,selectedId:items.find(r=>!records.get(r.id).locked)?.id,drawerOpenings:Object.fromEntries((state.drawers||[]).map(d=>[d.id,d.opening])),doorOpening:state.doors?.[0]?.opening??1});
+  checkpoint();setSeatViewActive(false);
+  if(state.appearance?.theme)setTheme(state.appearance.theme);
+  if(state.lighting){lightingPresetId=state.lighting.preset;lightingIntensity=state.lighting.intensity;lightingWarmth=state.lighting.warmth;applyLighting();}
+  if(state.view){setProjection(state.view.mode);controls.update();const damping=controls.enableDamping;controls.enableDamping=false;controls.update();camera.position.fromArray(state.view.position);controls.target.fromArray(state.view.target);camera.zoom=state.view.zoom;camera.updateProjectionMatrix();controls.update();controls.enableDamping=damping;syncCameraHeight(true);}
+  emit();toast('已恢复 '+items.length+' 个模型到当前方案 '+layouts.id.toUpperCase()+'，可撤销；另一方案未改动。');
+ }catch(error){if(!committed)disposePrepared();toast('导入布局失败：'+error.message+(committed?'':' 原场景保持不变。'));}
+ finally{setBusy(false);}
+}
+$('import-layout').onclick=()=>{if(!busy&&!planDrag)$('layout-input').click();};
+$('layout-input').onchange=async event=>{const files=[...event.target.files];event.target.value='';await importLayout(files);};
 const renderDialog=$('render-dialog'),renderPreview=document.createElement('canvas');let imageExporting=false;
 for(const preset of RENDER_PRESETS)$('render-angle').add(new Option(preset.label,preset.id));
 for(const size of RENDER_SIZES)$('render-resolution').add(new Option(size.label,size.id));

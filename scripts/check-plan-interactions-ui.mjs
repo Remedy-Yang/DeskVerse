@@ -16,6 +16,15 @@ try{
  const surface=initial.placement.surface,outline=surface.polygon,rectangleArea=(surface.max[0]-surface.min[0])*(surface.max[2]-surface.min[2]);
  assert.equal(surface.shapeSource,'named-top-mesh');assert.ok(area(outline)<rectangleArea-1);
  const signs=outline.map((p,i)=>{const a=outline[(i+outline.length-1)%outline.length],b=outline[(i+1)%outline.length];return (p[0]-a[0])*(b[1]-p[1])-(p[1]-a[1])*(b[0]-p[0]);});assert.ok(signs.some(n=>n>1e-4)&&signs.some(n=>n< -1e-4),'The real desktop must retain its concave return');
+ const assertPlanFraming=async()=>{
+  const framing=await page.locator('#plan-map').evaluate(svg=>{
+   const boxes=[...svg.querySelectorAll('.plan-surface,.plan-support,.plan-item')].map(shape=>shape.getBBox());
+   return {left:Math.min(...boxes.map(box=>box.x)),right:Math.max(...boxes.map(box=>box.x+box.width)),top:Math.min(...boxes.map(box=>box.y)),bottom:Math.max(...boxes.map(box=>box.y+box.height))};
+  });
+  assert.ok(framing.left>=18&&framing.right<=342&&framing.top>=20&&framing.bottom<=196,'桌面、抽屉与物品的正常轮廓应完整显示');
+  near(framing.left+framing.right,360,2);
+ };
+ await assertPlanFraming();
  await page.screenshot({path:resolve(output,'real-curved-outline.png'),fullPage:true});
  const setDimensions=async values=>{await page.locator('#uniform').uncheck();for(const [index,id]of ['dx','dy','dz'].entries()){await page.locator('#'+id).fill(String(values[index]));await page.locator('#'+id).dispatchEvent('change');}await page.locator('#confirm-size').click();};
  await select(monitor.id);await setDimensions([8,10,5]);await page.locator('#snap').uncheck();
@@ -48,6 +57,7 @@ try{
  await page.locator('[data-workspace="b"]').click();await page.locator('[data-workspace="a"]').click();
  await page.locator('#file-input').setInputFiles('dist/assets/demo-lamp.glb');await page.waitForFunction(()=>window.deskverse.getState().objects.length===4&&document.getElementById('loading').hidden);
  const lamp=(await state()).objects.at(-1);await setDimensions([4,3,6]);await page.locator('[data-panel-tab="furniture"]').click();await page.selectOption('#drawer-select','left-drawer');await page.locator('#drawer-open').click();await page.waitForFunction(()=>window.deskverse.getState().drawers[0].opening===1);await page.locator('#drawer-store').click();assert.equal((await object(lamp.id)).storage.drawerId,'left-drawer');
+ await assertPlanFraming();
  await page.locator('[data-projection="wireframe"]').click();
  const beforeReplacement=await state();
  const unchanged=async()=>{const current=await state();assert.deepEqual(current.objects,beforeReplacement.objects);assert.deepEqual(current.drawers,beforeReplacement.drawers);assert.equal(current.view.mode,'wireframe');};

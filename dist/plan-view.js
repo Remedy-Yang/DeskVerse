@@ -108,7 +108,10 @@ export function renderPlan(svg,report,onSelect,dragCallbacks=null){
  // 视野最多扩到桌面尺寸的两倍；远处物品只显示边缘提示，不让异常坐标把桌面缩成一点。
  const limit={minX:centerX-width,maxX:centerX+width,minZ:centerZ-depth,maxZ:centerZ+depth};
  let minX=surface.min[0],maxX=surface.max[0],minZ=surface.min[2],maxZ=surface.max[2];
- for(const item of items)for(const [x,z] of item.polygon){minX=Math.min(minX,clamp(x,limit.minX,limit.maxX));maxX=Math.max(maxX,clamp(x,limit.minX,limit.maxX));minZ=Math.min(minZ,clamp(z,limit.minZ,limit.maxZ));maxZ=Math.max(maxZ,clamp(z,limit.minZ,limit.maxZ));}
+ // 抽屉内腔也会绘制轮廓，必须参与居中，避免左侧被裁切而右侧留白。
+ for(const shapes of [items,report.supports||[]]){
+  for(const shape of shapes)for(const [x,z] of shape.polygon){minX=Math.min(minX,clamp(x,limit.minX,limit.maxX));maxX=Math.max(maxX,clamp(x,limit.minX,limit.maxX));minZ=Math.min(minZ,clamp(z,limit.minZ,limit.maxZ));maxZ=Math.max(maxZ,clamp(z,limit.minZ,limit.maxZ));}
+ }
  const scale=Math.min(308/Math.max(1,maxX-minX),164/Math.max(1,maxZ-minZ));
  const projection=state.gesture?.projection||{scale,offsetX:180-(minX+maxX)*scale/2,offsetZ:106-(minZ+maxZ)*scale/2};state.projection=projection;
  const project=([x,z])=>[x*projection.scale+projection.offsetX,z*projection.scale+projection.offsetZ];
