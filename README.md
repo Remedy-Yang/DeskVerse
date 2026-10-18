@@ -6,6 +6,14 @@
 
 **场景不会自动保存。** 刷新会清空 A/B 物品、会话自定义资产库和撤销记录。请下载布局 JSON，并保留自定义模型原始 GLB；通过顶部「导入布局」恢复。
 
+## 黑客松提交材料
+
+- [项目说明文档](docs/项目说明文档.md)：项目简介、成员信息、功能、原创与 AI 使用边界；为独立 MR 项目预留关联位置。
+- [技术文档](docs/技术文档.md)：当前实现、架构、数据格式、部署与验证方式。
+- [第三方资源及授权说明](docs/第三方资源说明.md)：软件许可、API 服务、模型 / 尺寸图清单及待补授权材料。
+
+成员、签署声明和资产授权中的空栏须由团队补充；材料不代表所有外部资源已完成授权审查。
+
 ## 快速启动
 
 需要 Python 3；本机代理只使用标准库，无需安装 Python 第三方依赖。浏览器推荐启用硬件加速的 Chrome 或 Edge。
@@ -299,7 +307,7 @@ window.addEventListener('deskverse:change', event => {
 
 ## 验证与已知限制
 
-当前功能基线为 [PR #1](https://github.com/Remedy-Yang/DeskVerse/pull/1) 合入的版本。以下是开发验收记录，不代表每次文档更新都重新执行全部流程：
+实现与使用说明随当前仓库更新。以下保留早期功能交付及后续开发的验收记录，不是当前版本的测试总数，也不代表本次文档更新重新执行全部流程：
 
 - Node：73 项测试通过，覆盖核心尺寸 / 历史、真实 GLB、家具行程与铰链、碰撞 / 摆放、参考尺寸、A/B、线框与出图相机。
 - 静态检查：28 个 JS 模块、177 个 UI ID、GLB / 解码器 / OCR 资源通过。
@@ -333,6 +341,6 @@ window.addEventListener('deskverse:change', event => {
 3. 在二维图跨过弧形凹口拖动，核对边界提示及一次撤销 / 取消；切换 A/B 验证独立性。
 4. 操作四抽屉、柜门和椅子，收纳 / 取回物品并撤销；替换桌子时测试失败保留和成功回放。
 5. 按住右键平移镜头，确认模型不变且镜头与观察点同步移动；打开效果图确认默认当前视角，改过构图后重新打开仍重置。
-6. 对照日夜光照与不同分辨率 PNG，确认没有编辑辅助；分别导出 A/B JSON，且明确 JSON 目前不能回导。
+6. 对照日夜光照与不同分辨率 PNG，确认没有编辑辅助；分别导出 A/B JSON，再导入恢复当前方案。自定义模型需另存原始 GLB，JSON 不包含模型。
 
 技术资料：[GLTFLoader](https://threejs.org/docs/pages/GLTFLoader.html)、[OrbitControls](https://threejs.org/docs/pages/OrbitControls.html)、[OrthographicCamera](https://threejs.org/docs/pages/OrthographicCamera.html)、[PointLight](https://threejs.org/docs/pages/PointLight.html)、[Three.js 截图说明](https://github.com/mrdoob/three.js/blob/dev/manual/pages/tips.html)。仓库使用固定的 Three.js r180；运行时以本地源码为准，不会从这些文档站点下载依赖。
