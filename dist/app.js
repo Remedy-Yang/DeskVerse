@@ -539,6 +539,15 @@ async function importLayout(files){
 }
 $('import-layout').onclick=()=>{if(!busy&&!planDrag)$('layout-input').click();};
 $('layout-input').onchange=async event=>{const files=[...event.target.files];event.target.value='';await importLayout(files);};
+$('load-official-layout').onclick=async()=>{
+ if(busy||planDrag||activeDrag||seatPan||transform.dragging)return;
+ setBusy(true,'正在读取官方默认桌搭配置，文件较大，请稍候…');$('load-official-layout').disabled=true;
+ try{
+  const response=await fetch('/DeskVerse-layout-default.json');if(!response.ok)throw new Error('官方默认桌搭配置读取失败，请使用项目启动器并保留根目录配置文件。');
+  const text=await response.text();setBusy(false);
+  await importLayout([{name:'DeskVerse-layout-default.json',text:async()=>text}]);
+ }catch(error){toast(error.message);}finally{setBusy(false);$('load-official-layout').disabled=false;}
+};
 const renderDialog=$('render-dialog'),renderPreview=document.createElement('canvas');let imageExporting=false;
 for(const preset of RENDER_PRESETS)$('render-angle').add(new Option(preset.label,preset.id));
 for(const size of RENDER_SIZES)$('render-resolution').add(new Option(size.label,size.id));

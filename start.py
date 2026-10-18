@@ -74,6 +74,21 @@ class Handler(SimpleHTTPRequestHandler):
             path = urlparse(self.path).path
             if any(part.startswith('.') for part in unquote(path).split('/') if part):
                 raise ServiceError('文件不存在。', 404)
+            if path == '/DeskVerse-layout-default.json':
+                target = Path(self.directory).parent / 'DeskVerse-layout-default.json'
+                try:
+                    source = target.open('rb')
+                except OSError:
+                    raise ServiceError('官方默认桌搭配置不存在。', 404)
+                with source:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(target.stat().st_size))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.send_header('X-Content-Type-Options', 'nosniff')
+                    self.end_headers()
+                    self.copyfile(source, self.wfile)
+                return
             if path.startswith('/models/'):
                 return self.serve_library_model(path)
             if path == '/api/generation/config':
