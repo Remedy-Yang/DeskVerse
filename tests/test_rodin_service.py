@@ -373,6 +373,28 @@ class HttpTests(unittest.TestCase):
                 urlopen(self.base + path)
             self.assertEqual(caught.exception.code, 404)
 
+    def test_library_serves_unicode_glb_without_exposing_other_project_files(self):
+        from urllib.parse import quote
+        folder = self.root / 'models' / '数码外设'
+        folder.mkdir(parents=True)
+        model = b'glTF-library-content'
+        (folder / '键盘.glb').write_bytes(model)
+        (folder / '来源.zip').write_bytes(b'private archive')
+        (self.root / 'outside.glb').write_bytes(b'outside')
+        with urlopen(self.base + quote('/models/数码外设/键盘.glb')) as response:
+            self.assertEqual(response.read(), model)
+            self.assertEqual(response.headers['Content-Type'], 'model/gltf-binary')
+        for path in ('/models/', '/models/数码外设/', '/models/数码外设/来源.zip',
+                     '/models/%2e%2e/outside.glb', '/models/..%5coutside.glb',
+                     '/models/%2foutside.glb', '/models/missing.glb'):
+            with self.subTest(path=path), self.assertRaises(HTTPError) as caught:
+                urlopen(self.base + quote(path, safe='/%'))
+            self.assertEqual(caught.exception.code, 404)
+        for headers in ({'Origin': 'https://attacker.example'}, {'Host': 'attacker.example'}):
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(Request(self.base + quote('/models/数码外设/键盘.glb'), headers=headers))
+            self.assertEqual(caught.exception.code, 403)
+
 
 if __name__ == '__main__':
     unittest.main()

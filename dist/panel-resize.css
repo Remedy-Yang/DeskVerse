@@ -1,0 +1,123 @@
+:root {
+  --assets-width: 320px;
+}
+
+/* 左栏为浮层；仅移动依赖它的标注，不改变全屏画布尺寸。 */
+@media (min-width: 601px) {
+  .left-panel {
+    width: var(--assets-width);
+  }
+}
+
+.assets-resizer {
+  position: fixed;
+  z-index: 21;
+  top: 94px;
+  bottom: 98px;
+  left: calc(16px + var(--assets-width) - 5px);
+  width: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.assets-resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 3px;
+  height: 46px;
+  border-radius: 8px;
+  background: var(--border-strong, #c7bdaf);
+  transform: translateY(-50%);
+  transition: background-color 140ms ease, height 140ms ease;
+}
+
+.assets-resizer:hover::after,
+.assets-resizer:focus-visible::after,
+body.is-resizing-assets .assets-resizer::after {
+  height: 68px;
+  background: var(--accent-dark, #9b683c);
+}
+
+.assets-resizer:focus-visible {
+  outline: 2px solid var(--accent-dark, #9b683c);
+  outline-offset: 1px;
+  background: var(--surface-raised, #fffbf5);
+}
+
+body.is-resizing-assets,
+body.is-resizing-assets * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+@media (min-width: 1101px) {
+  body:not(.is-focused) .atelier-heading {
+    left: calc(var(--assets-width) + 40px);
+  }
+
+  body:not(.is-focused) .viewport-label,
+  body:not(.is-focused) .scene-caption,
+  body:not(.is-focused) .surface-readout {
+    left: calc(var(--assets-width) + 41px);
+  }
+
+  body:not(.is-focused) .surface-readout {
+    max-width: calc(100% - var(--assets-width) - 382px);
+  }
+
+  body:not(.is-focused) .drop-overlay {
+    left: calc(var(--assets-width) + 32px);
+  }
+
+  body:not(.is-focused) .fatal {
+    left: calc(var(--assets-width) + 24px);
+  }
+
+  body:not(.is-focused) .loading {
+    max-width: calc(100vw - var(--assets-width) - 412px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .assets-resizer {
+    display: none;
+    bottom: 114px;
+  }
+
+  body[data-open-panel="assets"]:not(.is-focused) .assets-resizer {
+    display: block;
+  }
+}
+
+body.is-focused .assets-resizer {
+  display: none;
+}
+
+@media (max-height: 650px) and (min-width: 601px) {
+  .assets-resizer {
+    top: 88px;
+    bottom: 94px;
+  }
+}
+
+@media (max-width: 600px) {
+  .assets-resizer,
+  body[data-open-panel="assets"]:not(.is-focused) .assets-resizer {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assets-resizer::after {
+    transition: none;
+  }
+}

@@ -24,7 +24,7 @@ try{
  await page.locator('#drawer-close').click();await page.waitForFunction(()=>window.deskverse.getState().drawers[0].opening===0);
  await page.locator('#drawer-open').click();await page.waitForFunction(()=>window.deskverse.getState().drawers[0].opening===1);
  // 导入真实鼠标，按尺寸图保持 6.4 / 3.9 / 12 cm（XYZ）。
- await page.locator('#file-input').setInputFiles('deskmodels/鼠标/base_basic_pbr.glb');
+ await page.locator('#file-input').setInputFiles('models/02-数码外设/鼠标/旧目录版本-待核对/base_basic_pbr.glb');
  await page.waitForFunction(()=>window.deskverse.getState().objects.length===4&&document.getElementById('loading').hidden,null,{timeout:60000});
  await page.locator('#uniform').uncheck();
  for(const [id,value] of [['dx','6.4'],['dy','3.9'],['dz','12']]){await page.locator('#'+id).fill(value);await page.locator('#'+id).dispatchEvent('change');}
