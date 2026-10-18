@@ -20,6 +20,7 @@ import {RENDER_PRESETS,RENDER_SIZES,createRenderCamera,renderSceneCanvas} from '
 import {LAYOUT_ASSETS,legacyModel,validateLayout,encodeModel,decodeModel} from './layout-import.js';
 import {initPanelResize} from './panel-resize.js';
 import {initModelLibrary,MODEL_ASSETS} from './model-library.js';
+import {bindAssetLights} from './asset-lights.js';
 const $=id=>document.getElementById(id);
 const MAX_SIZE_CHART_BYTES=20*1024*1024;
 let sizeOcrWorkerPromise=null;
@@ -405,6 +406,7 @@ async function prepareBuffer(buffer,sourceFile,role='item',options={}){
   const chairModel=extractChair(root);
   if(chairModel&&options.includeChair!==false){const box=boundsOf(chairModel),center=box.getCenter(new THREE.Vector3()),geometry=normalizeModel(chairModel,Math.max(...box.getSize(new THREE.Vector3()).toArray())),chairId=crypto.randomUUID();geometry.root.userData.recordId=chairId;geometry.root.position.set(center.x,r.floorHeightCm,center.z);const chairRecord={...r,...geometry,id:chairId,builtinAsset:options.builtinAsset==='desk'?'chair':null,role:'item',furniture:'chair',name:'椅子',locked:false,bytes:0,surfaceHeightCm:null,surfaceFootprintCm:null,surfaceY:r.floorHeightCm,grounded:true,icon:'chair',sizeVariants:[],drawerSystems:undefined,doorSystem:undefined,sourceFile:options.builtinAsset==='desk'?'desk-real.glb#chair':sourceFile+'#chair',calibrated:true,chairHomeZ:center.z};chairRecord.initialDimensionsCm=getDimensions(chairRecord).toArray();children.push(chairRecord);}
  }
+ if(role==='item')bindAssetLights(gltf.scene,options.lightEffect);
  return {record:r,children};
 }
 async function addBuffer(buffer,sourceFile,role='item',options={}){
@@ -489,7 +491,8 @@ async function importLayout(files){
    if(!prepared){
     let buffer,options=descriptor.options||{},asset=descriptor.builtin?LAYOUT_ASSETS[descriptor.builtin]:null;
     // 只转交现有导入器使用的字段，禁止 JSON 注入资源 URL 或其他运行时对象。
-    options=Object.fromEntries(['name','categoryId','photoGenerated','photoJobId','demo','locked','icon','targetSize','dimensions','rotationDeg','calibrated','calibrateHeightCm','depthCm','surfaceHeightCm','surfaceFootprintCm','x','z','yaw'].filter(key=>Object.hasOwn(options,key)).map(key=>[key,options[key]]));
+    options=Object.fromEntries(['name','categoryId','photoGenerated','photoJobId','demo','locked','icon','targetSize','dimensions','rotationDeg','calibrated','calibrateHeightCm','depthCm','surfaceHeightCm','surfaceFootprintCm','x','z','yaw','lightEffect'].filter(key=>Object.hasOwn(options,key)).map(key=>[key,options[key]]));
+    if(options.lightEffect!==undefined&&!['floor-lamp','light-strip'].includes(options.lightEffect))throw new Error('未知灯具光效。');
     for(const key of ['targetSize','calibrateHeightCm','depthCm'])if(options[key]!==undefined&&(!Number.isFinite(options[key])||options[key]<=0||options[key]>100000))throw new Error('模型初始尺寸无效。');
     for(const key of ['surfaceHeightCm','x','z','yaw'])if(options[key]!=null&&(!Number.isFinite(options[key])||Math.abs(options[key])>100000))throw new Error('模型初始位置无效。');
     for(const key of ['dimensions','surfaceFootprintCm'])if(options[key]!=null&&(!Array.isArray(options[key])||options[key].length!==(key==='dimensions'?3:2)||options[key].some(n=>!Number.isFinite(n)||n<=0||n>100000)))throw new Error('模型尺寸数据无效。');
