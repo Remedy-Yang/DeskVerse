@@ -91,13 +91,14 @@
 <div id="toast" class="toast" role="status" hidden></div>
 <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
   <div class="photo-dialog-heading"><h2 id="photo-title">照片建模</h2><button id="photo-close" type="button" aria-label="关闭照片建模" title="关闭" class="photo-close">&times;</button></div>
+  <div id="generation-config" class="generation-config" role="status">正在连接本机建模服务…</div>
+  <details id="generation-key-settings" class="generation-key-settings"><summary>配置自己的 Rodin API Key</summary><form id="generation-key-form"><label for="generation-key">API Key</label><div class="generation-key-row"><input id="generation-key" type="password" autocomplete="off" spellcheck="false" maxlength="4096" placeholder="粘贴你的 Rodin API Key"><button id="generation-key-save" type="submit" class="button subtle" disabled>本次启用</button></div><p>仅保存在本机服务内存，重启后恢复 .env / 环境变量配置；不写入浏览器存储。有进行中任务时不能切换已启用的密钥。</p><div id="generation-key-message" role="status" aria-live="polite"></div></form></details>
   <form id="photo-form">
-    <div id="generation-config" class="generation-config" role="status">正在连接本机建模服务…</div>
     <div class="photo-inputs">
-      <div class="photo-preview-area"><img id="photo-preview" alt="待生成模型的照片" hidden><button id="photo-choose" type="button" class="button subtle"><span data-icon="upload"></span>选择物品照片</button><input id="photo-input" type="file" accept="image/png,image/jpeg,image/webp" hidden><span id="photo-filename" class="photo-filename"></span></div>
-      <div class="photo-fields"><label for="photo-name">物品名称</label><input id="photo-name" type="text" maxlength="80" placeholder="例如：保温杯" required><label for="photo-category">物品类别</label><select id="photo-category" aria-label="照片物品类别"></select><output id="photo-reference-size" class="reference-note"></output><span class="photo-field-label">生成档位</span><output>Rodin Regular · GLB · PBR</output><p class="generation-notice">尺寸采用类别参考值，非实物测量。单张照片的背面、遮挡及朝向可能存在误差。</p></div>
+      <div class="photo-preview-area"><div id="photo-previews" class="photo-previews" aria-label="已选择的参考照片"></div><button id="photo-choose" type="button" class="button subtle"><span data-icon="upload"></span>添加物品照片</button><input id="photo-input" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><span id="photo-filename" class="photo-filename" aria-live="polite">尚未选择照片 · 最多 5 张</span><p class="generation-notice">同一物品的正面、侧面、背面；PNG / JPG / WebP，单张 ≤ 20 MB，合计 ≤ 40 MB。</p></div>
+      <div class="photo-fields"><label for="photo-name">物品名称</label><input id="photo-name" type="text" maxlength="80" placeholder="例如：保温杯" required><label for="photo-category">物品类别</label><select id="photo-category" aria-label="照片物品类别"></select><output id="photo-reference-size" class="reference-note"></output><span class="photo-field-label">生成档位</span><output>Rodin Regular · GLB · PBR</output><p class="generation-notice">1–5 张照片共同生成一个模型，补充视角有助于还原遮挡部分，但不保证精度。尺寸采用类别参考值，非实物测量。</p></div>
     </div>
-    <label class="generation-consent"><input id="photo-consent" type="checkbox" required><span>同意将此照片发送至 Rodin，并按账户当前 API 价格扣除积分。</span></label>
+    <label class="generation-consent"><input id="photo-consent" type="checkbox" required><span>同意将所选的全部照片发送至 Rodin，并按账户当前 API 价格扣除积分。</span></label>
     <div id="photo-error" class="photo-error" role="alert" hidden></div>
     <div class="photo-dialog-actions"><button id="photo-submit" type="submit" class="button primary" disabled><span data-icon="cube"></span><span id="photo-submit-label">确认并生成</span></button></div>
   </form>
