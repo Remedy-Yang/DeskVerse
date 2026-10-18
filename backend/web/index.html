@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f7f5f0" />
+  <title>DeskVerse · 把喜欢放进生活</title>
+  <link rel="stylesheet" href="/web/style.css" />
+  <script defer src="/web/app.js"></script>
+  <script type="module">
+    // Load a pinned 3D viewer. The rest of the app works if these CDNs are blocked.
+    try { await import('https://cdn.jsdelivr.net/npm/@google/model-viewer@4.3.1/dist/model-viewer.min.js'); }
+    catch (firstError) {
+      try { await import('https://cdnjs.cloudflare.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js'); }
+      catch (secondError) { console.warn('3D preview CDNs unavailable:', firstError, secondError); }
+    }
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a href="#home" class="brand" aria-label="DeskVerse 首页">
+        <span class="brand-mark"><span class="mark-back"></span><span class="mark-front"></span></span>
+        <span class="brand-word">deskverse<span class="brand-dot">.</span><small>把喜欢放进生活</small></span>
+      </a>
+      <div class="nav-label">你的工作空间</div>
+      <nav class="side-nav" aria-label="主导航">
+        <a class="nav-item active" href="#home" data-nav="home"><span class="nav-icon">⌂</span> 工作台</a>
+        <a class="nav-item" href="#library" data-nav="library"><span class="nav-icon">▦</span> 我的资产库 <span class="nav-counter" id="navCount">0</span></a>
+        <a class="nav-item" href="#create" data-nav="create"><span class="nav-icon">＋</span> 导入新物品</a>
+        <a class="nav-item" href="#jobs" data-nav="jobs"><span class="nav-icon">◷</span> 生成任务</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="side-story"><span class="side-story-icon">✳</span><strong>让想象先入住</strong><span>在购买之前，先看看它在真实桌面上是什么样。</span></div>
+        <div class="server-state"><span class="status-dot" id="connectionDot"></span><span id="connectionText">连接服务器中…</span></div>
+        <div class="build-text">DeskVerse Studio · v1.4</div>
+      </div>
+    </aside>
+
+    <main class="main-area" id="home">
+      <header class="topbar">
+        <button class="mobile-menu" id="menuToggle" aria-label="展开导航">☰</button>
+        <div class="breadcrumb">我的空间 <span> / </span> 工作台</div>
+        <div class="top-actions"><span class="ambient-pill"><span class="tiny-sun">✺</span> Make room for imagination</span><button class="icon-btn" id="refreshBtn" aria-label="刷新所有数据" title="刷新数据">↻</button></div>
+      </header>
+
+      <div class="content">
+        <section class="hero" aria-label="欢迎">
+          <div class="hero-copy">
+            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR PERSONAL SPACE STUDIO</div>
+            <h1>把喜欢的物件，<br/><em>放进生活里。</em></h1>
+            <p>从一张照片开始，把心仪的好物变成可以触碰的 3D 资产。先在这里收藏与预览，再戴上 PICO，看看它们落在桌面上的样子。</p>
+            <div class="hero-buttons"><a class="btn btn-dark" href="#create">＋ &nbsp;添加一个新物件 <span class="button-arrow">↗</span></a><a class="btn btn-outline" href="#library">浏览我的收藏 ↗</a></div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="art-glow"></div><div class="art-frame"></div><div class="art-halo halo-one"></div><div class="art-halo halo-two"></div>
+            <div class="art-pedestal"></div><div class="art-desk"></div>
+            <div class="art-screen"><div class="art-screen-inner"><span></span><span></span><span></span></div></div>
+            <div class="art-stem"></div><div class="art-leaf leaf-a"></div><div class="art-leaf leaf-b"></div><div class="art-pot"></div>
+            <div class="art-mug"><div class="art-mug-handle"></div></div>
+            <div class="art-caption">a little more like home ↗</div>
+          </div>
+        </section>
+
+        <section class="stats-row" aria-label="资产统计">
+          <div class="stat-box"><span class="stat-icon stat-sage">▦</span><div><span class="stat-label">已生成 3D 资产</span><strong id="assetCount">—</strong></div><span class="stat-foot">可在 PICO 中摆放</span></div>
+          <div class="stat-box"><span class="stat-icon stat-peach">◧</span><div><span class="stat-label">已导入商品图片</span><strong id="sourceCount">—</strong></div><span class="stat-foot">等待你的下一步</span></div>
+          <div class="stat-box"><span class="stat-icon stat-blue">◷</span><div><span class="stat-label">正在生成</span><strong id="taskCount">—</strong></div><span class="stat-foot">Rodin 云端任务</span></div>
+        </section>
+
+        <section class="section" id="library">
+          <div class="section-heading"><div><div class="section-kicker">THE COLLECTION</div><h2>我的空间资产库 <span class="heading-star">✳</span></h2><p>每一件收藏，都值得先在真实空间里试一试。</p></div><a href="#create" class="text-link">添加新物件 <span>↗</span></a></div>
+          <div class="library-toolbar">
+            <div class="seg-tabs" role="tablist" aria-label="资产类别"><button class="seg-btn active" data-filter="all" role="tab" aria-selected="true">全部资产</button><button class="seg-btn" data-filter="models" role="tab" aria-selected="false">3D 模型</button><button class="seg-btn" data-filter="drafts" role="tab" aria-selected="false">待生成图片</button></div>
+            <div class="library-tools"><label class="searchbox"><span>⌕</span><input id="assetSearch" type="search" placeholder="搜索你的收藏…" aria-label="搜索资产" /></label><select id="sortAssets" aria-label="资产排序"><option value="newest">最近导入</option><option value="oldest">最早导入</option><option value="name">名称排序</option></select></div>
+          </div>
+          <div id="assetGrid" class="asset-grid" aria-live="polite"></div>
+          <div id="libraryEmpty" class="empty-state hidden"><div class="empty-mark">✳</div><h3>这里还留着一点空间</h3><p>上传第一张喜欢的物件图片，开始布置你的生活。</p><a class="btn btn-dark" href="#create">去添加物件 ↗</a></div>
+        </section>
+
+        <section class="section create-section" id="create">
+          <div class="section-heading"><div><div class="section-kicker">BRING SOMETHING NEW</div><h2>添加一个喜欢的物件</h2><p>上传照片、尝试解析链接，或直接导入现成的 GLB。</p></div><div class="kicker-chip">01 — COLLECT</div></div>
+          <div class="create-layout">
+            <div class="create-card">
+              <div class="create-tabs" role="tablist" aria-label="导入方式"><button class="create-tab active" data-mode="image" role="tab" aria-selected="true">◧ &nbsp;商品图片</button><button class="create-tab" data-mode="url" role="tab" aria-selected="false">↗ &nbsp;商品链接</button><button class="create-tab" data-mode="glb" role="tab" aria-selected="false">⬡ &nbsp;现成 GLB</button></div>
+              <div class="create-body">
+                <form id="imageForm" class="upload-form" data-form="image">
+                  <div class="input-group"><label>商品照片 <span class="required">*</span></label><label class="dropzone" id="imageDropzone"><input name="file" id="imageFile" type="file" accept="image/png,image/jpeg,image/webp" required /><span class="drop-icon">↑</span><strong>点击选择，或拖入商品照片</strong><small>JPG、PNG、WebP · 不超过 10 MB</small><img id="imagePreview" class="file-preview hidden" alt="已选择商品照片" /></label><div class="file-caption" id="imageFileName"></div></div>
+                  <div class="field-grid"><label class="input-group full"><span>给它起个名字 <span class="required">*</span></span><input name="name" required maxlength="80" placeholder="例如：我的复古台灯" /></label></div>
+                  <div class="dimensions"><label class="input-group"><span>占地宽度 <small>cm</small></span><input name="width_cm" type="number" min="1" max="500" step="0.1" required placeholder="30" /></label><label class="input-group"><span>占地深度 <small>cm</small></span><input name="depth_cm" type="number" min="1" max="500" step="0.1" required placeholder="20" /></label><label class="input-group"><span>模型外观宽度 <small>cm</small></span><input name="visible_width_cm" type="number" min="1" max="500" step="0.1" required placeholder="30" /></label></div>
+                  <div class="form-hint">尺寸请根据商品真实规格填写；模型会按「外观宽度」缩放。</div>
+                  <div class="form-bottom"><button class="btn btn-dark submit-btn" type="submit">保存到待生成区 ↗</button><span class="form-tiny">保存不会消耗 Rodin 额度</span></div>
+                </form>
+
+                <form id="urlForm" class="upload-form hidden" data-form="url">
+                  <label class="input-group"><span>商品链接或图片直链 <span class="required">*</span></span><input name="url" type="url" required placeholder="https://…" /></label>
+                  <div class="soft-note"><span>ⓘ</span><p>支持公开 HTTPS 图片直链；部分商品页面的公开主图也可识别。京东、淘宝的登录、跳转或访问限制可能导致解析失败；失败时请切换至图片上传。</p></div>
+                  <label class="input-group"><span>商品名称 <span class="required">*</span></span><input name="name" required maxlength="80" placeholder="例如：原木收纳架" /></label>
+                  <div class="dimensions"><label class="input-group"><span>占地宽度 <small>cm</small></span><input name="width_cm" type="number" min="1" max="500" step="0.1" required placeholder="30" /></label><label class="input-group"><span>占地深度 <small>cm</small></span><input name="depth_cm" type="number" min="1" max="500" step="0.1" required placeholder="20" /></label><label class="input-group"><span>模型外观宽度 <small>cm</small></span><input name="visible_width_cm" type="number" min="1" max="500" step="0.1" required placeholder="30" /></label></div>
+                  <div class="form-bottom"><button class="btn btn-dark submit-btn" type="submit">解析并保存图片 ↗</button><span class="form-tiny">不保证解析所有电商链接</span></div>
+                </form>
+
+                <form id="glbForm" class="upload-form hidden" data-form="glb">
+                  <div class="input-group"><label>GLB 资产文件 <span class="required">*</span></label><label class="dropzone" id="glbDropzone"><input name="file" id="glbFile" type="file" accept=".glb,model/gltf-binary" required /><span class="drop-icon">⬡</span><strong>点击选择，或拖入 GLB 文件</strong><small>GLB 2.0 · 不超过 40 MB</small></label><div class="file-caption" id="glbFileName"></div></div>
+                  <label class="input-group"><span>商品名称 <span class="required">*</span></span><input name="name" required maxlength="80" placeholder="例如：无线耳机" /></label>
+                  <div class="dimensions"><label class="input-group"><span>占地宽度 <small>cm</small></span><input name="width_cm" type="number" min="1" max="500" step="0.1" required placeholder="20" /></label><label class="input-group"><span>占地深度 <small>cm</small></span><input name="depth_cm" type="number" min="1" max="500" step="0.1" required placeholder="12" /></label><label class="input-group"><span>模型外观宽度 <small>cm</small></span><input name="visible_width_cm" type="number" min="1" max="500" step="0.1" required placeholder="20" /></label></div>
+                  <div class="form-hint">直接上传已有 GLB 会立即出现在资产库，并在 PICO 下次轮询时加载，不需要 Rodin API。</div>
+                  <div class="form-bottom"><button class="btn btn-dark submit-btn" type="submit">导入 GLB 资产 ↗</button><span class="form-tiny">无需 AI 生成额度</span></div>
+                </form>
+              </div>
+            </div>
+            <div class="create-aside"><span class="aside-ornament">✳</span><span class="aside-label">A NOTE FROM DESKVERSE</span><h3>先想象，<br/>再决定。</h3><p>喜欢的耳机、灯具、收纳盒，都可以先成为一件 3D 资产。试着放到自己的桌子上，尺寸和氛围合适，再做决定。</p><div class="aside-divider"></div><div class="aside-mini"><span>01</span> 收集一件喜欢的好物</div><div class="aside-mini"><span>02</span> 生成并预览 3D 资产</div><div class="aside-mini"><span>03</span> 戴上眼镜，在桌面上摆放</div><div class="aside-bottom">make it yours. <span>♡</span></div></div>
+          </div>
+        </section>
+
+        <section class="section jobs-section" id="jobs"><div class="section-heading"><div><div class="section-kicker">A LITTLE MAGIC</div><h2>生成任务</h2><p>从商品图片到 3D 模型，进度会显示在这里。</p></div><span class="subtle-tag">云端生成可能产生费用</span></div><div class="jobs-list" id="jobsList"></div></section>
+        <footer class="footer"><span>© DeskVerse Studio · 为美好的日常留点空间</span><span>本地局域网演示版 · 请勿直接暴露公网</span></footer>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="previewModal" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+    <div class="modal-card"><div class="modal-header"><div><span class="section-kicker">3D PREVIEW</span><h2 id="previewTitle">预览模型</h2></div><button class="close-modal" id="closeModal" aria-label="关闭预览">×</button></div><div class="viewer-stage"><model-viewer id="modelViewer" camera-controls auto-rotate shadow-intensity="1" exposure="1" environment-image="neutral" interaction-prompt="auto" alt="3D 资产预览"></model-viewer><div class="viewer-tip">拖动旋转 · 滚轮缩放 · 双指手势调整</div><div class="viewer-loading" id="viewerNotice">正在加载 3D 预览…</div></div><div class="modal-info"><div id="previewDimensions" class="detail-line"></div><div class="modal-actions"><a id="downloadLink" href="#" class="btn btn-outline" download>下载 GLB ↓</a><button id="removeAsset" class="btn btn-danger" type="button">删除资产</button></div></div></div>
+  </div>
+  <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
+</body>
+</html>
