@@ -1006,3 +1006,6 @@ body[data-scene-tone="dark"] .optical-scale { color: #c1cad6; text-shadow: 0 1px
 @media (max-width: 600px) {
   .camera-height-panel { bottom: calc(108px + env(safe-area-inset-bottom)); }
 }
+@media (max-width: 389px) {
+  .header-actions > .button, #render-export { width: 26px; min-width: 26px; padding: 0; }
+}
