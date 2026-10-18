@@ -21,11 +21,12 @@ test('Realwood bed retains its 200 by 90 footprint and 210 height with the workt
  const top=boundsOf(r.root.getObjectByName('Desk_top_with_rounded_return__asset'));near(top.max.y,0);
  const fixed=top.clone().union(boundsOf(r.root.getObjectByName('Cupboard_outer_side__asset'))).union(boundsOf(r.root.getObjectByName('Right_desk_pedestal_outer_side__asset'))),fixedSize=fixed.getSize(new T.Vector3());near(fixedSize.x,200);near(fixedSize.z,90);
 });
-test('Drawer groups five real panels, leaves runners fixed, and translates without scaling',async()=>{
- const r=await desk(),drawer=createDrawerSystem(r.root);assert.ok(drawer);assert.equal(drawer.parts.length,5);
- const closed=boundsOf(drawer.group),scale=drawer.group.scale.toArray();const runner=r.root.getObjectByName('Drawer_runner__asset'),runnerBox=boundsOf(runner);
- drawer.setOpening(1);const open=boundsOf(drawer.group);near(open.min.z-closed.min.z,drawer.travel);near(open.min.x,closed.min.x);near(open.min.y,closed.min.y);assert.deepEqual(drawer.group.scale.toArray(),scale);
- assert.deepEqual(boundsOf(runner).min.toArray(),runnerBox.min.toArray());drawer.setOpening(0);near(boundsOf(drawer.group).min.z,closed.min.z);
+test('Drawer groups panels and side runners, translating all parts without scaling',async()=>{
+ const r=await desk(),drawer=createDrawerSystem(r.root);assert.ok(drawer);assert.equal(drawer.parts.length,7);
+ const closed=boundsOf(drawer.group),scale=drawer.group.scale.toArray(),runner=r.root.getObjectByName('Drawer_runner__asset'),runnerClosed=boundsOf(runner);
+ drawer.setOpening(1);const open=boundsOf(drawer.group),runnerOpen=boundsOf(runner);near(open.min.z-closed.min.z,drawer.travel);near(open.min.x,closed.min.x);near(open.min.y,closed.min.y);
+ near(runnerOpen.min.z-runnerClosed.min.z,drawer.travel);near(runnerOpen.min.x,runnerClosed.min.x);near(runnerOpen.min.y,runnerClosed.min.y);assert.deepEqual(drawer.group.scale.toArray(),scale);
+ drawer.setOpening(0);near(boundsOf(drawer.group).min.z,closed.min.z);near(boundsOf(runner).min.z,runnerClosed.min.z);
 });
 test('Drawer opening is bounded and rejects nonfinite inputs',async()=>{
  const drawer=createDrawerSystem((await desk()).root);drawer.setOpening(4);near(drawer.opening,1);drawer.setOpening(-1);near(drawer.opening,0);assert.throws(()=>drawer.setOpening(NaN));assert.throws(()=>drawer.setOpening(Infinity));
