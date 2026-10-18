@@ -69,7 +69,7 @@
       <p id="camera-height-note">Y=0 为桌面；只改变相机高度，不移动模型。</p>
     </section>
     <div class="tool-dock" role="toolbar" aria-label="编辑工具"><button data-mode="drag" title="沿 XZ 平面拖动 (V)"><span data-icon="hand"></span><span>拖动</span><kbd>V</kbd></button><button data-mode="translate" class="active" title="XYZ 自由移动 (G)"><span data-icon="move"></span><span>移动</span><kbd>G</kbd></button><button data-mode="place" title="点击桌面终点放置选中物品"><span data-icon="target"></span><span>点击落点</span></button><button data-mode="rotate" title="自由旋转 (R)"><span data-icon="rotate"></span><span>旋转</span><kbd>R</kbd></button><button data-mode="scale" title="缩放 (S)"><span data-icon="scale"></span><span>缩放</span><kbd>S</kbd></button><button id="camera-height-toggle" type="button" title="调节当前摄像机的 Y 轴高度" aria-label="相机 Y 轴高度" aria-expanded="false" aria-controls="camera-height-panel"><span data-icon="elevation"></span><span>相机高度</span></button><i></i><button id="undo" title="撤销 (Ctrl+Z)" aria-label="撤销" data-icon="undo" disabled></button><button id="redo" title="重做 (Ctrl+Shift+Z)" aria-label="重做" data-icon="redo" disabled></button></div>
-    <div class="scene-caption"><span class="caption-line"></span><div><strong>给想法，留一个位置。</strong><span id="scene-hint">拖动 X / Y / Z 箭头自由移动；中键拖动环绕查看</span></div></div>
+    <div class="scene-caption"><span class="caption-line"></span><div><strong>给想法，留一个位置。</strong><span id="scene-hint">拖动 X / Y / Z 箭头自由移动；中键拖动环绕查看；按住右键拖动平移视角</span></div></div>
     <div class="axis-legend" aria-label="坐标轴约定"><span class="axis-y">Y ↑ 高</span><span class="axis-x">X → 左右</span><span class="axis-z">Z ↙ 前后</span></div>
     <div id="drop-overlay" class="drop-overlay" hidden><span data-icon="upload"></span><strong>松开，放入你的 GLB</strong><span>每个文件作为独立物品导入</span></div>
     <div id="loading" class="loading" role="status" hidden><span class="spinner"></span><span id="loading-text">正在加载模型…</span></div>
@@ -91,7 +91,7 @@
     <div class="inspector-footer"><span data-icon="info"></span><p>初始桌面中心为原点，Y 轴向上。碰撞会用红框和提示标记，但不会限制自由移动。</p></div>
   </aside>
 </div>
-<footer class="statusbar"><span><i class="status-dot"></i><span id="status-text">准备就绪</span></span><span class="mouse-help">中键拖动：环绕 <i>·</i> Shift＋中键：平移 <i>·</i> 滚轮：缩放</span><span>1 单位 = 1 cm <i>·</i> WebGL 2</span></footer>
+<footer class="statusbar"><span><i class="status-dot"></i><span id="status-text">准备就绪</span></span><span class="mouse-help">中键拖动：环绕 <i>·</i> 按住右键拖动 / Shift＋中键：平移 <i>·</i> 滚轮：缩放</span><span>1 单位 = 1 cm <i>·</i> WebGL 2</span></footer>
 <div id="toast" class="toast" role="status" hidden></div>
 <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
   <div class="photo-dialog-heading"><h2 id="photo-title">照片建模</h2><button id="photo-close" type="button" aria-label="关闭照片建模" title="关闭" class="photo-close">&times;</button></div>
