@@ -82,8 +82,8 @@ function node(tag,className,text){
 }
 
 export function initModelLibrary({container,loader,onAdd,onError}){
- const cards=[],cache=new Map();
- let disposed=false,started=false,busy=false,adding=null,running=false,scheduled=null,studio=null,controller=null;
+ const cards=[],cache=new Map(),groups=new Map(),assets=new Map(MODEL_ASSETS.map(asset=>[asset.name,asset])),imports=new Map();
+ let disposed=false,started=false,busy=false,adding=null,running=false,scheduled=null,studio=null,controller=null,customId=0,observer=null;
  const report=(error,asset,phase)=>onError?.(error,asset,phase);
  function syncButtons(){
   for(const card of cards){
@@ -98,10 +98,13 @@ export function initModelLibrary({container,loader,onAdd,onError}){
   card.status.textContent=message||({idle:'滚动到此处加载预览',loading:'正在渲染模型…',error:'预览失败，可重试'}[state]||'');
   card.retry.hidden=state!=='error';card.preview.setAttribute('aria-busy',String(state==='loading'));
  }
- for(const category of [...new Set(MODEL_ASSETS.map(asset=>asset.category))]){
-  const section=node('section','model-library-group'),heading=node('h3','model-library-category',category),grid=node('div','model-library-grid');
-  section.setAttribute('aria-label',category);section.append(heading,grid);container.append(section);
-  for(const asset of MODEL_ASSETS.filter(asset=>asset.category===category)){
+ function updateCount(){const count=document.getElementById('model-library-count');if(count)count.textContent=String(assets.size);}
+ function addCard(asset){
+  let grid=groups.get(asset.category);
+  if(!grid){
+   const section=node('section','model-library-group'),heading=node('h3','model-library-category',asset.category);grid=node('div','model-library-grid');
+   section.setAttribute('aria-label',asset.category);section.append(heading,grid);container.append(section);groups.set(asset.category,grid);
+  }
    const element=node('article','model-library-card');element.dataset.assetId=asset.id;
    const preview=node('div','model-library-preview'),image=node('img','model-library-image');
    image.width=WIDTH;image.height=HEIGHT;image.alt=`${asset.name}模型预览`;image.decoding='async';
@@ -124,14 +127,15 @@ export function initModelLibrary({container,loader,onAdd,onError}){
     finally{adding=null;if(!disposed){syncButtons();schedule();}}
    });
    element.addEventListener('click',event=>{if(!event.target.closest('button'))add.click();});
-  }
+   observer?.observe(element);syncButtons();schedule();
  }
- const observer=new IntersectionObserver(entries=>{
+ for(const asset of MODEL_ASSETS)addCard(asset);
+ observer=new IntersectionObserver(entries=>{
   for(const entry of entries){const card=cards.find(item=>item.element===entry.target);if(card)card.visible=entry.isIntersecting;}
   schedule();
  },{root:null,rootMargin:'60px 0px',threshold:0});
  for(const card of cards)observer.observe(card.element);
- syncButtons();
+ syncButtons();updateCount();
 
  function schedule(){
   if(disposed||!started||busy||adding||running||scheduled!==null||!cards.some(card=>card.visible&&card.state==='idle'))return;
@@ -144,13 +148,16 @@ export function initModelLibrary({container,loader,onAdd,onError}){
   running=true;setPreview(card,'loading');
   let gltf,root;
   try{
-   let url=cache.get(card.asset.path);
+   let url=cache.get(card.asset.id);
    if(!url){
-    controller=new AbortController();
-    const response=await fetch(card.asset.path,{signal:controller.signal});
-    if(!response.ok)throw new Error(`模型请求失败（HTTP ${response.status}）。`);
-    if(Number(response.headers.get('Content-Length'))>MAX_FILE_SIZE)throw new Error('预览文件超过 80 MB。');
-    const buffer=await response.arrayBuffer();
+    let buffer=card.asset.buffer;
+    if(!buffer){
+     controller=new AbortController();
+     const response=await fetch(card.asset.path,{signal:controller.signal});
+     if(!response.ok)throw new Error(`模型请求失败（HTTP ${response.status}）。`);
+     if(Number(response.headers.get('Content-Length'))>MAX_FILE_SIZE)throw new Error('预览文件超过 80 MB。');
+     buffer=await response.arrayBuffer();
+    }
     if(disposed)return;
     if(buffer.byteLength>MAX_FILE_SIZE)throw new Error('预览文件超过 80 MB。');
     inspectGLB(buffer);gltf=await loader.parseAsync(buffer,'');
@@ -161,7 +168,7 @@ export function initModelLibrary({container,loader,onAdd,onError}){
     const blob=await new Promise((resolve,reject)=>studio.renderer.domElement.toBlob(value=>value?resolve(value):reject(new Error('无法生成模型预览。')),'image/png'));
     if(disposed)return;
     if(studio.lost)throw new Error('缩略图图形上下文已丢失，请重试。');
-    url=URL.createObjectURL(blob);cache.set(card.asset.path,url);
+    url=URL.createObjectURL(blob);cache.set(card.asset.id,url);
    }
    card.image.src=url;setPreview(card,'ready');
   }catch(error){
@@ -173,6 +180,24 @@ export function initModelLibrary({container,loader,onAdd,onError}){
   }
  }
  return {
+  find(name){return assets.get(name);},
+  async register({name,sourceFile,buffer,options={},role}){
+   if(disposed)throw new Error('模型资产库已关闭。');
+   if(buffer.byteLength>MAX_FILE_SIZE)throw new Error('模型文件超过 80 MB。');
+   inspectGLB(buffer);
+   const digest=await crypto.subtle.digest('SHA-256',buffer);
+   if(disposed)throw new Error('模型资产库已关闭。');
+   const hash=Array.from(new Uint8Array(digest),value=>value.toString(16).padStart(2,'0')).join(''),key=JSON.stringify([sourceFile,hash]);
+   if(imports.has(key))return imports.get(key);
+   const base=String(name||sourceFile||'自定义模型').replace(/\.glb$/i,'').trim()||'自定义模型';
+   let unique=base,suffix=2;
+   while(assets.has(unique))unique=`${base} (${suffix++})`;
+   let id;
+   do{id=`custom-${++customId}`;}while(cards.some(card=>card.asset.id===id));
+   const asset={id,name:unique,sourceFile,buffer,options:options||{},role,category:'自定义模型',sizeLabel:'自定义尺寸',sizeNote:'本次会话导入的模型'};
+   assets.set(unique,asset);imports.set(key,asset);addCard(asset);updateCount();
+   return asset;
+  },
   setBusy(value){if(disposed)return;busy=!!value;syncButtons();if(!busy)schedule();},
   // 主场景载入结束后显式启动，避免首屏与大模型并发抢占解码和显存。
   startPreviews(){if(disposed)return;started=true;schedule();},
@@ -180,7 +205,8 @@ export function initModelLibrary({container,loader,onAdd,onError}){
    if(disposed)return;disposed=true;observer.disconnect();controller?.abort();
    if(scheduled!==null){if(typeof cancelIdleCallback==='function')cancelIdleCallback(scheduled);else clearTimeout(scheduled);scheduled=null;}
    for(const url of cache.values())URL.revokeObjectURL(url);cache.clear();
-   for(const card of cards)card.element.remove();
+   for(const card of cards){card.element.remove();if(card.asset.buffer)delete card.asset.buffer;}
+   cards.length=0;imports.clear();assets.clear();groups.clear();
    for(const section of container.querySelectorAll('.model-library-group'))section.remove();
    if(!running){releaseStudio(studio);studio=null;}
   }

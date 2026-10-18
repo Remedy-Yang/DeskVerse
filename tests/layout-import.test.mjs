@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validateLayout,legacyModel,encodeModel,decodeModel} from '../dist/layout-import.js';
+import {validateLayout,legacyModel} from '../dist/layout-import.js';
 
 const object=()=>({id:'lamp',name:'台灯',sourceFile:'lamp.glb',role:'item',position:[10,0,-8],rotation:[0,45,0],scale:[1,2,1],dimensionsCm:[10,20,10]});
 const layout=()=>({schemaVersion:1,units:'cm',objects:[object()]});
@@ -30,8 +30,8 @@ test('旧内置桌柜及独立椅子使用同一模型来源；自定义文件�
  assert.equal(legacyModel(object()).builtin,null);
  assert.equal(legacyModel({...object(),sourceFile:'https://example.com/a.glb'}).builtin,null);
 });
-test('内嵌二进制保持每个字节，含分块边界和非 ASCII 字节',()=>{
- const bytes=Uint8Array.from({length:70001},(_,i)=>i%256);
- assert.deepEqual(new Uint8Array(decodeModel(encodeModel(bytes.buffer))),bytes);
- assert.throws(()=>decodeModel('invalid!'));assert.throws(()=>decodeModel(null));
+test('Named layouts require model names and reject embedded binaries',()=>{
+ const state={...layout(),models:{lamp:{modelName:'台灯',sourceFile:'lamp.glb',role:'item'}}};validateLayout(state);
+ assert.throws(()=>validateLayout({...state,models:{lamp:{sourceFile:'lamp.glb'}}}));
+ assert.throws(()=>validateLayout({...state,models:{lamp:{modelName:'台灯',data:'AAAA'}}}));
 });

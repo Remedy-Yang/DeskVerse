@@ -75,7 +75,7 @@ class Handler(SimpleHTTPRequestHandler):
             if any(part.startswith('.') for part in unquote(path).split('/') if part):
                 raise ServiceError('文件不存在。', 404)
             if path == '/DeskVerse-layout-default.json':
-                target = Path(self.directory).parent / 'DeskVerse-layout-default.json'
+                target = Path(self.directory) / 'assets' / 'layout-default.json'
                 try:
                     source = target.open('rb')
                 except OSError:

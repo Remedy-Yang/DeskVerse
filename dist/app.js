@@ -17,7 +17,7 @@ import {LayoutSchemes} from './workspaces.js';
 import {createStudioFloor,fitDirectionalShadow} from './environment.js';
 import {DeskWireframe} from './desk-view.js';
 import {RENDER_PRESETS,RENDER_SIZES,createRenderCamera,renderSceneCanvas} from './render-export.js';
-import {LAYOUT_ASSETS,legacyModel,validateLayout,encodeModel,decodeModel} from './layout-import.js';
+import {LAYOUT_ASSETS,legacyModel,validateLayout} from './layout-import.js';
 import {initPanelResize} from './panel-resize.js';
 import {initModelLibrary,MODEL_ASSETS} from './model-library.js';
 import {bindAssetLights} from './asset-lights.js';
@@ -419,17 +419,18 @@ async function addBuffer(buffer,sourceFile,role='item',options={}){
 async function importFiles(files,role='item',options={}){
  if(busy||planDrag)return;const list=[...files];if(!list.length)return;const replacing=role==='table'&&!!table();
  setBusy(true,role==='table'?'正在准备新桌子，原场景保持不变…':'准备导入…');let loaded=0,failed=0,last=null,lastError='';
- for(const [index,file]of list.entries()){try{if(!/\.glb$/i.test(file.name))throw new Error('仅支持 .glb 文件。');if(file.size>MAX_FILE_SIZE)throw new Error('文件超过 80 MB。');$('loading-text').textContent='正在导入 '+(index+1)+'/'+list.length+' · '+file.name;last=await addBuffer(await file.arrayBuffer(),file.name,role,options);loaded++;}catch(e){failed++;lastError=file.name+'：'+e.message;console.warn('GLB import failed',e);}}
+ for(const [index,file]of list.entries()){try{if(!/\.glb$/i.test(file.name))throw new Error('仅支持 .glb 文件。');if(file.size>MAX_FILE_SIZE)throw new Error('文件超过 80 MB。');$('loading-text').textContent='正在导入 '+(index+1)+'/'+list.length+' · '+file.name;last=await addBuffer(await file.arrayBuffer(),file.name,role,options);const source=last.layoutSource,asset=await modelLibrary.register({name:options.name||fileModelName(file.name),sourceFile:file.name,buffer:source.buffer,options:source.options,role});source.modelName=asset.name;loaded++;}catch(e){failed++;lastError=file.name+'：'+e.message;console.warn('GLB import failed',e);}}
  setBusy(false);if(loaded){focus(last.root);checkpoint();toast(role==='table'?(replacing?'已替换当前桌子，其他物品与尺寸保留，可撤销。':'已导入桌子，可撤销。')+(failed?lastError:''):'已导入 '+loaded+' 个模型'+(failed?'，'+failed+' 个失败。'+lastError:'。请在右侧校准真实尺寸。'));}else toast((lastError||'没有导入模型。')+(replacing?' 原桌柜保持不变。':''));
 }
+function fileModelName(source){return source.split('/').pop().replace(/\.glb$/i,'');}
 async function addLibraryAsset(asset){
  if(busy||planDrag||activeDrag||seatPan||transform.dragging||asset.fixed)return;
  setBusy(true,'正在放入 '+asset.name+'…');
  try{
   const options={...asset.options,name:asset.name};
   if(asset.placement==='upper-bed'){const bed=upperBedSurface(table()?.root);if(!bed)throw new Error('当前桌柜没有可识别的上铺床板，请先恢复默认桌柜。');const center=bed.getCenter(new THREE.Vector3());Object.assign(options,{x:center.x,y:bed.max.y,z:center.z});}
-  const response=await fetch(asset.path);if(!response.ok)throw new Error('模型读取失败，请确认使用项目启动器且 models 目录完整。');
-  const r=await addBuffer(await response.arrayBuffer(),asset.path,'item',options);
+  const buffer=asset.buffer||await(async()=>{const response=await fetch(asset.path);if(!response.ok)throw new Error('模型读取失败，请确认使用项目启动器且 models 目录完整。');return response.arrayBuffer();})();
+  const r=await addBuffer(buffer,asset.sourceFile||asset.path,asset.role||'item',options);r.layoutSource.modelName=asset.name;
   checkpoint();focus(r.root);toast('已添加 '+asset.name+'，可继续点击添加另一份。尺寸需核对。');
  }finally{setBusy(false);}
 }
@@ -468,9 +469,10 @@ function exportLayout(){
  for(const object of state.objects){
   const r=records.get(object.id),source=r.layoutSource;object.modelKey=source.key;object.modelPart=r.furniture==='chair'?'chair':'root';
   object.sizeVariants=structuredClone(r.sizeVariants);object.activeSizeVariantId=r.activeSizeVariantId;
-  if(!Object.hasOwn(models,source.key))models[source.key]={sourceFile:source.sourceFile,role:source.role,builtin:source.builtin,options:source.options,...(source.buffer?{data:encodeModel(source.buffer)}:{})};
+  const modelName=source.modelName||({desk:'固定桌柜',monitor:'显示器','demo-lamp':'示例台灯','demo-monitor':'示例显示器'}[source.builtin])||MODEL_ASSETS.find(asset=>asset.path===source.sourceFile)?.name||fileModelName(source.sourceFile);
+  if(!Object.hasOwn(models,source.key))models[source.key]={modelName,sourceFile:source.sourceFile,role:source.role,builtin:source.builtin,options:source.options};
  }
- const blob=new Blob([JSON.stringify({...state,models,note:'使用“导入布局”恢复当前方案；自定义 GLB 已内嵌，内置资源由本机加载。'},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='DeskVerse-layout.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('已导出可恢复的布局 JSON（含自定义模型）。');
+ const blob=new Blob([JSON.stringify({...state,layoutFormat:'named-models',models,note:'仅保存布局和模型名称；缺少自定义模型时，请同时选择 JSON 和同名原始 GLB。'},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='DeskVerse-layout.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('已导出轻量布局 JSON，不包含模型文件。');
 }
 $('export').onclick=exportLayout;$('render-json').onclick=exportLayout;
 // 全部资源离线准备成功后才替换当前方案，旧对象留给撤销及另一方案。
@@ -502,17 +504,20 @@ async function importLayout(files){
     if(asset){
      if(descriptor.role!==asset.role)throw new Error('内置模型类型不匹配。');
      const response=await fetch('./assets/'+asset.file);if(!response.ok)throw new Error('内置模型加载失败：'+asset.file);buffer=await response.arrayBuffer();options={...asset.options,...options};
-    }else if(descriptor.data!==undefined)buffer=decodeModel(descriptor.data);
-    else{
-     const matching=list.filter(file=>file.name===descriptor.sourceFile);
-     if(matching.length>1)throw new Error('存在同名 GLB，请只选择一个：'+descriptor.sourceFile);
-     const cached=[...records.values()].find(r=>r.layoutSource?.sourceFile===descriptor.sourceFile)?.layoutSource;
-     if(matching[0]){if(matching[0].size>MAX_FILE_SIZE)throw new Error('模型超过 80 MB。');buffer=await matching[0].arrayBuffer();}
-     else if(cached?.buffer){buffer=cached.buffer;options=cached.options;}
-     else throw new Error('缺少模型 '+descriptor.sourceFile+'。请重新点击“导入布局”，同时选择 JSON 和该原始 GLB。');
+    }else{
+     const catalog=MODEL_ASSETS.find(asset=>asset.name===descriptor.modelName),cached=modelLibrary.find(descriptor.modelName);
+     if(catalog){const response=await fetch(catalog.path);if(!response.ok)throw new Error('资产库模型加载失败：'+catalog.name);buffer=await response.arrayBuffer();}
+     else if(cached?.buffer){buffer=cached.buffer;}
+     else{
+      const filename=descriptor.sourceFile.split('/').pop(),matching=list.filter(file=>file.name===filename||fileModelName(file.name)===descriptor.modelName);
+      if(matching.length>1)throw new Error('存在同名 GLB，请只选择一个：'+filename);
+      if(!matching[0])throw new Error('缺少模型「'+descriptor.modelName+'」。请重新点击“导入布局”，同时选择 JSON 和 '+filename+'。');
+      if(matching[0].size>MAX_FILE_SIZE)throw new Error('模型超过 80 MB。');buffer=await matching[0].arrayBuffer();
+     }
     }
     $('loading-text').textContent='正在恢复 '+object.name+'…';
     prepared=await prepareBuffer(buffer,descriptor.sourceFile,descriptor.role,{...options,includeChair:true});
+    prepared.record.layoutSource.modelName=descriptor.modelName;
     staged.push(prepared.record,...prepared.children);groups.set(key,prepared);
    }
    const r=part==='chair'?prepared.children.find(r=>r.furniture==='chair'):prepared.record;
@@ -528,6 +533,7 @@ async function importLayout(files){
   for(const entry of state.drawers||[])if(!importedTable?.drawerSystems?.some(d=>d.id===entry.id))throw new Error('布局抽屉与模型不匹配。');
   if(state.doors?.length&&!importedTable?.doorSystem)throw new Error('布局柜门与模型不匹配。');
   checkpoint();for(const r of staged)records.set(r.id,r);committed=true;
+  for(const r of staged){const source=r.layoutSource;if(r.furniture==='chair'||source.builtin||MODEL_ASSETS.some(asset=>asset.name===source.modelName))continue;const asset=await modelLibrary.register({name:source.modelName,sourceFile:source.sourceFile,buffer:source.buffer,options:source.options,role:source.role});source.modelName=asset.name;}
   restore({items,selectedId:items.find(r=>!records.get(r.id).locked)?.id,drawerOpenings:Object.fromEntries((state.drawers||[]).map(d=>[d.id,d.opening])),doorOpening:state.doors?.[0]?.opening??1});
   checkpoint();setSeatViewActive(false);
   if(state.appearance?.theme)setTheme(state.appearance.theme);
