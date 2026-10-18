@@ -2,12 +2,12 @@
 
 ## 仓库与分支关系
 
-本项目与 [Remedy-Yang/DeskVerse](https://github.com/Remedy-Yang/DeskVerse) 仓库中的其他项目同属黑客松比赛作品，在 `hackathon/web-studio-v14` 分支独立并行维护。该分支具有独立的根提交，不继承 `main` 或其他分支的提交历史；本分支仓库根目录即本项目目录。
+本项目与 [Remedy-Yang/DeskVerse](https://github.com/Remedy-Yang/DeskVerse) 仓库中的其他项目同属黑客松比赛作品，在 `MRStudio` 分支独立并行维护。该分支具有独立的根提交，不继承 `main` 或其他分支的提交历史；本分支仓库根目录即本项目目录。
 
 单独获取本项目：
 
 ```bash
-git clone --single-branch --branch hackathon/web-studio-v14 https://github.com/Remedy-Yang/DeskVerse.git DeskVerse-Web-Studio-v14
+git clone --single-branch --branch MRStudio https://github.com/Remedy-Yang/DeskVerse.git DeskVerse-Web-Studio-v14
 ```
 
 仓库包含前后端源码、测试、安装脚本及预览图，不包含本地虚拟环境、缓存、密钥和 `backend/data/` 中上传或生成的运行数据。首次运行时后端会自动创建数据目录，资产库初始为空。
