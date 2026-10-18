@@ -28,9 +28,9 @@ export function prepareDeskModel(model){
 
 export function createDrawerSystem(tableRoot){
  const floor=named(tableRoot,'Drawer_bottom'),front=named(tableRoot,'Drawer_front'),rear=named(tableRoot,'Drawer_rear');
- const sides=[];tableRoot.traverse(node=>{if(node.isMesh&&node.name.startsWith('Drawer_side'))sides.push(node);});
+ const sides=[],runners=[];tableRoot.traverse(node=>{if(!node.isMesh)return;if(node.name.startsWith('Drawer_side'))sides.push(node);if(node.name.startsWith('Drawer_runner'))runners.push(node);});
  if(!floor||!front||!rear||sides.length!==2)return null;
- const parent=floor.parent,parts=[floor,front,rear,...sides],group=new THREE.Group();group.name='desk-storage-drawer';parent.add(group);
+ const parent=floor.parent,parts=[floor,front,rear,...sides,...runners],group=new THREE.Group();group.name='desk-storage-drawer';parent.add(group);
  for(const part of parts){group.attach(part);part.userData.drawerId='left-drawer';}
  const partition=named(tableRoot,'Cupboard_and_desk_partition');
  const outer=named(tableRoot,'Cupboard_outer_side');if(outer&&partition)fitPanelAxis(front,'x',boxOf(outer).max.x+.2,boxOf(partition).min.x-.2);
