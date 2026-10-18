@@ -20,6 +20,7 @@
 <div class="workspace">
   <aside id="assets-dock" class="sidebar left-panel" aria-label="场景工具">
     <div class="panel-heading"><div><div class="eyebrow">SCENE COLLECTION</div><h1>空间标本匣</h1></div><span class="counter" id="object-count">0</span></div>
+    <button id="load-official-layout" type="button" class="button subtle" title="加载官方默认桌搭，替换当前方案，可撤销">导入官方默认桌搭</button>
     <div class="panel-tabs" role="tablist" aria-label="场景工具分类"><button id="assets-tab" type="button" role="tab" class="active" data-panel-tab="assets" aria-controls="assets-pane" aria-selected="true">资产</button><button id="furniture-tab" type="button" role="tab" data-panel-tab="furniture" aria-controls="furniture-pane" aria-selected="false" tabindex="-1">家具</button><button id="lighting-tab" type="button" role="tab" data-panel-tab="lighting" aria-controls="lighting-pane" aria-selected="false" tabindex="-1">光照</button></div>
     <div id="assets-pane" class="left-pane" role="tabpanel" aria-labelledby="assets-tab">
     <section class="asset-create" aria-label="创建模型"><div class="asset-section-heading"><div><span class="eyebrow">FROM PHOTO TO SPACE</span><h2>让物品，进入你的桌面。</h2></div></div><p class="asset-section-note">拍下身边的物品，生成专属三维模型。</p><section class="photo-generation" aria-label="照片建模"><button id="photo-open" class="button primary full"><span data-icon="camera"></span>照片生成 GLB</button><div id="generation-jobs" class="generation-jobs" aria-live="polite"></div></section><button id="upload-zone" class="button subtle full"><span data-icon="upload"></span>导入本地 GLB</button></section>

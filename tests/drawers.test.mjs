@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {prepareDeskModel,createDrawerSystem,createDrawerSystems,createDoorSystem,extractChair,findStoragePosition} from '../dist/drawers.js';
+import {prepareDeskModel,createDrawerSystem,createDrawerSystems,createDoorSystem,extractChair,findStoragePosition,upperBedSurface} from '../dist/drawers.js';
 import {colliders,sweep,firstOverlap} from '../dist/collision.js';
 import {normalizeModel,setDimension,boundsOf,getDimensions} from '../dist/core.js';
 
@@ -20,6 +20,14 @@ test('Realwood bed retains its 200 by 90 footprint and 210 height with the workt
  const bed=boundsOf(r.root.getObjectByName('Upper_bed_edge-aligned_guard_rails_with_entry_post')),bedSize=bed.getSize(new T.Vector3());near(bedSize.x,200);near(bedSize.z,90);
  const top=boundsOf(r.root.getObjectByName('Desk_top_with_rounded_return__asset'));near(top.max.y,0);
  const fixed=top.clone().union(boundsOf(r.root.getObjectByName('Cupboard_outer_side__asset'))).union(boundsOf(r.root.getObjectByName('Right_desk_pedestal_outer_side__asset'))),fixedSize=fixed.getSize(new T.Vector3());near(fixedSize.x,200);near(fixedSize.z,90);
+});
+test('Upper bed support follows the actual slats rather than the guard rails or desktop',async()=>{
+ const r=await desk(),surface=upperBedSurface(r.root),slat=boundsOf(r.root.getObjectByName('Loft_bed_slat_1__asset')),rails=boundsOf(r.root.getObjectByName('Upper_bed_edge-aligned_guard_rails_with_entry_post'));
+ near(surface.max.y,slat.max.y);assert.ok(surface.max.y>0);assert.ok(surface.max.y<rails.max.y);
+ const original=surface.clone();r.root.position.add(new T.Vector3(17,23,-11));r.root.scale.multiplyScalar(1.2);
+ const transformed=upperBedSurface(r.root),top=boundsOf(r.root.getObjectByName('Loft_bed_slat_1__asset'));near(transformed.max.y,top.max.y);
+ near(transformed.getSize(new T.Vector3()).x,original.getSize(new T.Vector3()).x*1.2);near(transformed.getCenter(new T.Vector3()).z,original.getCenter(new T.Vector3()).z*1.2-11);
+ assert.equal(upperBedSurface(new T.Group()),null);assert.equal(upperBedSurface(null),null);
 });
 test('Drawer groups panels and side runners, translating all parts without scaling',async()=>{
  const r=await desk(),drawer=createDrawerSystem(r.root);assert.ok(drawer);assert.equal(drawer.parts.length,7);

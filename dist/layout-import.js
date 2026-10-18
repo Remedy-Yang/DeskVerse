@@ -15,6 +15,7 @@ const positive=value=>vector(value)&&value.every(n=>n>0);
 export function validateLayout(state){
  if(!state||state.schemaVersion!==1||state.units!=='cm'||!Array.isArray(state.objects))throw new Error('请选择 DeskVerse 导出的布局 JSON（schemaVersion 1、cm）。');
  if(state.coordinateSystem&&(state.coordinateSystem.up!=='Y'||state.coordinateSystem.rotationUnit!=='degrees'||state.coordinateSystem.rotationOrder!=='XYZ'))throw new Error('布局坐标系不兼容。');
+ if(state.models)for(const model of Object.values(state.models)){if(model.data!==undefined)throw new Error('不再支持内嵌模型，请使用轻量布局并提供原始 GLB。');if(typeof model.modelName!=='string'||!model.modelName.trim())throw new Error('布局缺少模型名称。');}
  const ids=new Set();let tables=0;
  for(const object of state.objects){
   if(!object||typeof object.id!=='string'||!object.id||ids.has(object.id)||typeof object.name!=='string'||typeof object.sourceFile!=='string'||!['table','item'].includes(object.role))throw new Error('布局包含无效或重复的物品。');
@@ -32,15 +33,4 @@ export function validateLayout(state){
  if(state.view&&(!['perspective','top','wireframe'].includes(state.view.mode)||!vector(state.view.position)||!vector(state.view.target)||!Number.isFinite(state.view.zoom)||state.view.zoom<=0||state.view.zoom>100000))throw new Error('布局相机数据无效。');
  if(state.lighting&&(!Number.isFinite(state.lighting.intensity)||state.lighting.intensity<.5||state.lighting.intensity>1.5||!Number.isFinite(state.lighting.warmth)||Math.abs(state.lighting.warmth)>100))throw new Error('布局光照数据无效。');
  return state;
-}
-export function encodeModel(buffer){
- const bytes=new Uint8Array(buffer),chunks=[];
- for(let offset=0;offset<bytes.length;offset+=32768)chunks.push(String.fromCharCode(...bytes.subarray(offset,offset+32768)));
- return btoa(chunks.join(''));
-}
-export function decodeModel(value){
- if(typeof value!=='string'||value.length>Math.ceil(80*1024*1024/3)*4)throw new Error('内嵌模型无效或超过 80 MB。');
- const binary=atob(value),bytes=new Uint8Array(binary.length);
- for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);
- return bytes.buffer;
 }

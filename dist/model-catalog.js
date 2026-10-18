@@ -19,9 +19,10 @@ export const MODEL_ASSETS=[
  model('iced-tea','冰红茶','生活摆件','02-数码外设/鼠标/压缩包版本',12),
  {id:'floor-lamp',name:'立灯',category:'照明',path:'/models/03-照明/立灯/立灯.glb',options:{name:'立灯',targetSize:40,categoryId:'lamp',lightEffect:'floor-lamp'}},
  {id:'light-strip',name:'灯带',category:'照明',path:'/models/03-照明/灯带/灯带.glb',options:{name:'灯带',targetSize:50,categoryId:'generic',lightEffect:'light-strip'}},
+ {id:'mattress',name:'床垫',category:'家具',path:'/models/01-家具/床垫/床垫.glb',placement:'upper-bed',options:{name:'床垫',targetSize:190,dimensions:[190,20,80],rotationDeg:[0,90,0],calibrated:false,categoryId:'generic'}},
  {id:'desk-fixed',name:'固定桌柜',category:'家具',path:'/models/01-家具/桌柜/固定资产-桌柜.glb',fixed:true,options:{name:'固定桌柜'}}
 ].map(asset=>({
  ...asset,
  sizeLabel:asset.fixed?'默认场景固定资产':asset.options.dimensions?`参考 ${asset.options.dimensions.join(' × ')} cm`:`参考最长边 ${asset.options.targetSize} cm`,
- sizeNote:asset.fixed?'默认场景已提供桌柜，不重复添加。':asset.options.dimensions?'采用默认显示器规格参考，非新实测；导入后可校准。':'参考预设，非实测；保持原始比例，导入后可校准尺寸。'
+ sizeNote:asset.fixed?'默认场景已提供桌柜，不重复添加。':asset.id==='mattress'?'上铺单人床参考尺寸，非实测；默认放在床板上，可继续校准。':asset.options.dimensions?'采用默认显示器规格参考，非新实测；导入后可校准。':'参考预设，非实测；保持原始比例，导入后可校准尺寸。'
 }));
